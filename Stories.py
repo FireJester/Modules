@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-__version__ = (1, 0, 0)
+__version__ = (1, 0, 1)
 # meta developer: FireJester.t.me 
 
 import io
@@ -41,8 +41,8 @@ class Stories(loader.Module):
         "album_name_required": "<b>Album name required!</b>",
         "error": "<b>Error:</b> {}",
         "usage": (
-            "<b>Stories Manager</b>\n\n"
-            "<b>Posting (reply to photo):</b>\n"
+            "<b>Stories Manager</b>\n"
+            "<blockquote expandable><b>Posting (reply to photo):</b>\n"
             "<code>stories post</code> post grid to profile\n"
             "<code>stories post archive</code> post grid to archive\n"
             "<code>stories post album Name</code> post to existing album\n"
@@ -59,7 +59,7 @@ class Stories(loader.Module):
             "5:4 (1.25) 2 rows, 6 stories\n"
             "4:5 (0.80) 3 rows, 9 stories\n"
             "3:5 (0.60) 4 rows, 12 stories\n"
-            "9:16 (0.56) 5 rows, 15 stories"
+            "9:16 (0.56) 5 rows, 15 stories</blockquote>"
         ),
         "unknown_cmd": "<b>Unknown command</b>",
         "unknown_target": "<b>Unknown target</b>",
@@ -99,8 +99,8 @@ class Stories(loader.Module):
         "album_name_required": "<b>Укажите название альбома!</b>",
         "error": "<b>Ошибка:</b> {}",
         "usage": (
-            "<b>Менеджер историй</b>\n\n"
-            "<b>Публикация (ответ на фото):</b>\n"
+            "<b>Менеджер историй</b>\n"
+            "<blockquote expandable><b>Публикация (ответ на фото):</b>\n"
             "<code>stories post</code> опубликовать сетку в профиль\n"
             "<code>stories post archive</code> опубликовать сетку в архив\n"
             "<code>stories post album Название</code> опубликовать в существующий альбом\n"
@@ -117,7 +117,7 @@ class Stories(loader.Module):
             "5:4 (1.25) 2 ряда, 6 историй\n"
             "4:5 (0.80) 3 ряда, 9 историй\n"
             "3:5 (0.60) 4 ряда, 12 историй\n"
-            "9:16 (0.56) 5 рядов, 15 историй"
+            "9:16 (0.56) 5 рядов, 15 историй</blockquote>"
         ),
         "unknown_cmd": "<b>Неизвестная команда</b>",
         "unknown_target": "<b>Неизвестная цель</b>",
@@ -272,11 +272,10 @@ class Stories(loader.Module):
         return (None, None)
 
     @loader.command(
-        en_doc="- instruction for module",
         ru_doc="- инструкция к модулю"
     )
     async def storiescmd(self, message):
-        """stories post/delete/archive/unarchive"""
+        """- instruction for module"""
         args = utils.get_args_raw(message).strip()
         if not args:
             return await utils.answer(message, self.strings("usage"))
@@ -365,6 +364,11 @@ class Stories(loader.Module):
                 await utils.answer(message, self.strings("posted_archive").format(len(story_ids)))
 
             elif action == "new_album":
+                await self.client(functions.stories.TogglePinnedRequest(
+                    peer=types.InputPeerSelf(),
+                    id=story_ids,
+                    pinned=True
+                ))
                 await self.client(functions.stories.CreateAlbumRequest(
                     peer=types.InputPeerSelf(),
                     title=album_name,
@@ -374,6 +378,11 @@ class Stories(loader.Module):
 
             elif action == "album":
                 album = await self._find_album(album_name)
+                await self.client(functions.stories.TogglePinnedRequest(
+                    peer=types.InputPeerSelf(),
+                    id=story_ids,
+                    pinned=True
+                ))
                 await self.client(functions.stories.UpdateAlbumRequest(
                     peer=types.InputPeerSelf(),
                     album_id=album.album_id,
