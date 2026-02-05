@@ -393,7 +393,7 @@ class Logger(loader.Module):
                 chat_entity, _ = await utils.asset_channel(
                     self._client,
                     "Command Logs",
-                    "Command logs will appear here. @create_ur_dreams with ♡",
+                    "Command logs will appear here. @FireJester with ♡",
                     silent=True,
                     avatar=LOG_GROUP_AVATAR_URL,
                 )
