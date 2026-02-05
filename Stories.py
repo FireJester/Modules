@@ -272,8 +272,8 @@ class Stories(loader.Module):
         return (None, None)
 
     @loader.command(
-        en_doc="instruction for module"
-        ru_doc="- инструкция к модулю",
+        en_doc="-instruction for module",
+        ru_doc="- инструкция к модулю"
     )
     async def storiescmd(self, message):
         """stories post/delete/archive/unarchive"""
