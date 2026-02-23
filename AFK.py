@@ -1,7 +1,8 @@
-__version__ = ("-beta",1,0,1)
+# -*- coding: utf-8 -*-
 
-# module: AFK
-# meta developer: GXDEE.t.me
+__version__ = ("-beta",1,0,1)
+# meta developer: FireJester.t.me
+# update soon.. 
 
 from .. import loader, utils
 import time
