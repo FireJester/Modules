@@ -13,8 +13,8 @@ from .. import loader, utils
 
 logger = logging.getLogger(__name__)
 
-LOG_GROUP_AVATAR_URL = "https://i.postimg.cc/t4TjkxV4/IMG-0196.jpg"
-GREETING_MEDIA_URL = "https://i.postimg.cc/SRk0M2pL/IMG-0200.jpg"
+LOG_GROUP_AVATAR_URL = "https://github.com/FireJester/Media/raw/main/Group_avatar_for_logger_module.png"
+GREETING_MEDIA_URL = "https://github.com/FireJester/Media/raw/main/Banner_for_greeting_logger_in_module.png"
 
 
 @loader.tds
