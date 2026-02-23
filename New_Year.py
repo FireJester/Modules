@@ -1,7 +1,8 @@
-__version__ = (1, 0, 0)
+# -*- coding: utf-8 -*-
 
-# module: New_Year
-# meta developer: GXDEE.t.me
+__version__ = (1, 0, 0)
+# meta developer: FireJester.t.me 
+# update soon...
 
 from .. import loader, utils
 from datetime import datetime, timezone, timedelta
