@@ -1,7 +1,8 @@
-__version__ = (1,0,0)
+# -*- coding: utf-8 -*-
 
-# module: Gift
-# meta developer: GXDEE.t.me
+__version__ = (1, 0, 0)
+# meta developer: FireJester.me 
+# update soon...
 
 import io
 import logging
