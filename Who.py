@@ -1,4 +1,4 @@
-__version__ = (1,0,0)
+__version__ = (1,0,1)
 
 # module: Who
 # meta developer: GXDEE.t.me
@@ -28,7 +28,7 @@ class Who(loader.Module):
                 if getattr(u, "active", False):
                     return u.username
             return user.usernames[0].username
-        return NoneType
+        return None  
     async def _get_avatar(self, client, user):
         try:
             photos = await client.get_profile_photos(user, limit=1)
@@ -53,7 +53,6 @@ class Who(loader.Module):
         except Exception:
             return None, False
     def _add_silent_audio(self, video_path):
-#добавляет аудио, потому что при отправке видео без звука оно отправляется как GIF и сохраняется в GIF пользователя 
         output = tempfile.mktemp(suffix='.mp4')
         try:
             subprocess.run(
@@ -95,14 +94,14 @@ class Who(loader.Module):
                     return await message.client.get_entity(reply.sender_id)
                 except Exception:
                     return None
-                return None
+        return None
     def _build_info_text(self, user):
         first = user.first_name or ""
         last = user.last_name or ""
-        name = (first + " " + last).strip()
-        display_name = utils.escape_html(name)        
+        name = f"{first} {last}".strip()
+        display_name = utils.escape_html(name)                
         username = self._get_username(user)
-        if username:
+        if username and username.strip():
             username_text = f"@{utils.escape_html(username)}"
         else:
             username_text = f'<a href="tg://user?id={user.id}">{display_name}</a>'        
