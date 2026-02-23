@@ -74,7 +74,8 @@ class New_Year(loader.Module):
             msg = self.strings["new_year_template"].format(
                 year=time_data["year"],
                 days=time_data["days"],
-                hours=time_data["hours"],                minutes=time_data["minutes"],
+                hours=time_data["hours"],                
+                minutes=time_data["minutes"],
                 seconds=time_data["seconds"],
                 timezone_str=time_data["timezone_str"],
                 current_time=time_data["current_time"]

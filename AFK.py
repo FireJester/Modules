@@ -1,4 +1,4 @@
-__version__ = ("-beta",1,0)
+__version__ = ("-beta",1,0,1)
 
 # module: AFK
 # meta developer: GXDEE.t.me
@@ -13,55 +13,49 @@ import pytz
 @loader.tds
 class AFK(loader.Module):
 
-    strings = {"name": "AFK"}
-
-    # Единый шаблон для статуса AFK
-    afk_status_template = """<emoji document_id=5208725127277087011>👌</emoji><b> АФК активен</b>
+    strings = {
+        "name": "AFK",
+        
+        "afk_status_template": """<emoji document_id=5208725127277087011>👌</emoji><b> АФК активен</b>
 <emoji document_id=5208717791472943718>🗓️</emoji><b> Включен: </b>{start_str}
 <emoji document_id=5208717791472943718>🗓️</emoji><b> Вернусь: </b>{end_str}
 {remaining_str}
-<emoji document_id=5208894671111095514>✉️</emoji><b> Ответов отправлено: </b>{responded_count}"""
+<emoji document_id=5208894671111095514>✉️</emoji><b> Ответов отправлено: </b>{responded_count}""",
 
-    # Единый шаблон для ежедневного статуса
-    afk_status_daily_template = """<emoji document_id=5208786480884910414>📀</emoji><b> Ежедневный АФК запланирован</b>
+        "afk_status_daily_template": """<emoji document_id=5208786480884910414>📀</emoji><b> Ежедневный АФК запланирован</b>
 <emoji document_id=5208963115709927477>👉</emoji><b> Включение: </b>{start_str}
 <emoji document_id=5208583848622854140>🙈</emoji><b> Отключение: </b>{end_str}
 
-{activity_status}"""
+{activity_status}""",
 
-    # Статусы активности для ежедневного режима
-    afk_daily_active = "<emoji document_id=5208725127277087011>👌</emoji><b> Сейчас активен</b>"
-    afk_daily_inactive = "<emoji document_id=5208583848622854140>🙈</emoji><b> Сейчас неактивен</b>"
-    
-    # Остальные тексты
-    afk_on = "<emoji document_id=5208944814854283484>⬆️</emoji><b> AFK активен бессрочно</b>"
-    afk_off = "<emoji document_id=5208557765286468425>⛔️</emoji><b> AFK отключен</b>"
-    
-    # Ошибки
-    invalid_time = "<emoji document_id=5208777366964311643>😵</emoji><b> Введите корректные данные</b>"
-    not_a_group = "<emoji document_id=5208777366964311643>😵</emoji><b> Эта команда работает только в группах</b>"
-    afk_group_not_in_list = "<emoji document_id=5208777366964311643>😵</emoji><b> Группа не была в списке</b>"
-    
-    # Группы
-    afk_group_added = "<emoji document_id=5208456352518674554>👥</emoji><b> Группа добавлена в список автоответа</b>"
-    afk_group_removed = "<emoji document_id=5208825427648352217>❌</emoji><b> Группа удалена из списка автоответа</b>"
-    
-    afk_status_inactive = "<emoji document_id=5208777366964311643>😵</emoji><b> AFK не активен</b>"
-    
-    # Форматы для "Осталось"
-    afk_unlimited = "<b>Бессрочно</b>"
-    afk_remaining_hours = "<emoji document_id=5208943526364088201>⌛️</emoji><b> Осталось: </b>{hours_left:.1f} часов"
-    afk_remaining_unlimited = "<emoji document_id=5208725127277087011>👌</emoji><b> Осталось: </b><code>бессрочно</code>"
-    
-    # Остальные сообщения
-    afk_reply = "<emoji document_id=5208456004626320633>😴</emoji><b> К сожалению я сейчас AFK</b>\n<emoji document_id=5208583848622854140>🙈</emoji> <b> Последний раз был в сети: </b>{last_seen}"
-    afk_one_time = "<emoji document_id=5208786480884910414>📀</emoji><b> AFK установлен</b>\n<emoji document_id=5208963115709927477>👉</emoji><b> Включение: </b>{start_time}\n<emoji document_id=5208583848622854140>🙈</emoji><b> Отключение: </b>{end_time}"
-    afk_scheduled_daily = "<emoji document_id=5208786480884910414>📀</emoji><b> Ежедневный AFK установлен\n<emoji document_id=5208963115709927477>👉</emoji><b> Включение: </b>{start_str}\n<emoji document_id=5208583848622854140>🙈</emoji><b> Отключение: </b>{end_str}"
-    afk_set_time = "<emoji document_id=5208786480884910414>📀</emoji><b> AFK установлен на: </b>{duration}\n<emoji document_id=5208503000158470431>⏱</emoji><b> Вернусь: </b>{end_time}"
-    afk_groups_list_title = "<emoji document_id=5208456352518674554>👥</emoji><b> Список групп с AFK автоответом:</b>"
-    afk_groups_list_item = "\n\n<emoji document_id=5208569524906920074>🤝</emoji><b> {name} </b>\n<emoji document_id=5208786480884910414>📀</emoji><b> ID: </b><code>{chat_id}</code>"
-    afk_groups_list_empty = "<emoji document_id=5208606843877750802>✋</emoji><b> Список групп пуст</b>\n<blockquote>Используй команду <b>.afk on</b> в группе, которую хочешь добавить в список.</blockquote>"
-    afk_help_text = "<emoji document_id=5208456004626320633>😴</emoji><b> Список AFK команд:</b>\n<blockquote expandable>————————————————————\n<b>.afk [часы]</b> - включает на заданное количество часов\n(<code>.afk 2</code>)\n————————————————————\n<b>.afk [время1] [время2] - </b>установит AFK на промежуток с [время 1] до [время 2], один раз, если заданное время уже прошло  на момент создания AFK этой командой, то создание переносится на следующий день\n(<code>.afk 14:00 18:00</code>)\n————————————————————\n<b>.afk set [время1] [время2]</b> - установит AFK на промежуток с [время 1] до [время 2], ежедневное включение и выключение\n(<code>.afk set 14:00 18:00</code>)\n————————————————————\n<b>.afk unlim</b> - включает бессрочный AFK\n————————————————————\n<b>.afk stat</b> - показывает статус текущего AFK\n————————————————————\n<b>.afk list</b> - показывает список групп с установленными автоответами\n————————————————————\n<b>.afk on</b> - включить автоответ в текущей группе\n(использовать в группе)\n————————————————————\n<b>.afk off</b> - выключить автоответ в текущей группе\n(использовать в группе)\n————————————————————\n<b>.afk reset</b> - выключает AFK и сбрасывает расписание\n————————————————————</blockquote>"
+        "afk_daily_active": "<emoji document_id=5208725127277087011>👌</emoji><b> Сейчас активен</b>",
+        "afk_daily_inactive": "<emoji document_id=5208583848622854140>🙈</emoji><b> Сейчас неактивен</b>",
+        
+        "afk_on": "<emoji document_id=5208944814854283484>⬆️</emoji><b> AFK активен бессрочно</b>",
+        "afk_off": "<emoji document_id=5208557765286468425>⛔️</emoji><b> AFK отключен</b>",
+        
+        "invalid_time": "<emoji document_id=5208777366964311643>😵</emoji><b> Введите корректные данные</b>",
+        "not_a_group": "<emoji document_id=5208777366964311643>😵</emoji><b> Эта команда работает только в группах</b>",
+        "afk_group_not_in_list": "<emoji document_id=5208777366964311643>😵</emoji><b> Группа не была в списке</b>",
+        
+        "afk_group_added": "<emoji document_id=5208456352518674554>👥</emoji><b> Группа добавлена в список автоответа</b>",
+        "afk_group_removed": "<emoji document_id=5208825427648352217>❌</emoji><b> Группа удалена из списка автоответа</b>",
+        
+        "afk_status_inactive": "<emoji document_id=5208777366964311643>😵</emoji><b> AFK не активен</b>",
+        
+        "afk_unlimited": "<b>Бессрочно</b>",
+        "afk_remaining_hours": "<emoji document_id=5208943526364088201>⌛️</emoji><b> Осталось: </b>{hours_left:.1f} часов",
+        "afk_remaining_unlimited": "<emoji document_id=5208725127277087011>👌</emoji><b> Осталось: </b><code>бессрочно</code>",
+        
+        "afk_reply": "<emoji document_id=5208456004626320633>😴</emoji><b> К сожалению я сейчас AFK</b>\n<emoji document_id=5208583848622854140>🙈</emoji> <b> Последний раз был в сети: </b>{last_seen}",
+        "afk_one_time": "<emoji document_id=5208786480884910414>📀</emoji><b> AFK установлен</b>\n<emoji document_id=5208963115709927477>👉</emoji><b> Включение: </b>{start_time}\n<emoji document_id=5208583848622854140>🙈</emoji><b> Отключение: </b>{end_time}",
+        "afk_scheduled_daily": "<emoji document_id=5208786480884910414>📀</emoji><b> Ежедневный AFK установлен\n<emoji document_id=5208963115709927477>👉</emoji><b> Включение: </b>{start_str}\n<emoji document_id=5208583848622854140>🙈</emoji><b> Отключение: </b>{end_str}",
+        "afk_set_time": "<emoji document_id=5208786480884910414>📀</emoji><b> AFK установлен на: </b>{duration}\n<emoji document_id=5208503000158470431>⏱</emoji><b> Вернусь: </b>{end_time}",
+        "afk_groups_list_title": "<emoji document_id=5208456352518674554>👥</emoji><b> Список групп с AFK автоответом:</b>",
+        "afk_groups_list_item": "\n\n<emoji document_id=5208569524906920074>🤝</emoji><b> {name} </b>\n<emoji document_id=5208786480884910414>📀</emoji><b> ID: </b><code>{chat_id}</code>",
+        "afk_groups_list_empty": "<emoji document_id=5208606843877750802>✋</emoji><b> Список групп пуст</b>\n<blockquote>Используй команду <b>.afk on</b> в группе, которую хочешь добавить в список.</blockquote>",
+        "afk_help_text": "<emoji document_id=5208456004626320633>😴</emoji><b> Список AFK команд:</b>\n<blockquote expandable>————————————————————\n<b>.afk [часы]</b> - включает на заданное количество часов\n(<code>.afk 2</code>)\n————————————————————\n<b>.afk [время1] [время2] - </b>установит AFK на промежуток с [время 1] до [время 2], один раз, если заданное время уже прошло  на момент создания AFK этой командой, то создание переносится на следующий день\n(<code>.afk 14:00 18:00</code>)\n————————————————————\n<b>.afk set [время1] [время2]</b> - установит AFK на промежуток с [время 1] до [время 2], ежедневное включение и выключение\n(<code>.afk set 14:00 18:00</code>)\n————————————————————\n<b>.afk unlim</b> - включает бессрочный AFK\n————————————————————\n<b>.afk stat</b> - показывает статус текущего AFK\n————————————————————\n<b>.afk list</b> - показывает список групп с установленными автоответами\n————————————————————\n<b>.afk on</b> - включить автоответ в текущей группе\n(использовать в группе)\n————————————————————\n<b>.afk off</b> - выключить автоответ в текущей группе\n(использовать в группе)\n————————————————————\n<b>.afk reset</b> - выключает AFK и сбрасывает расписание\n————————————————————</blockquote>",
+    }
 
     def __init__(self):
         self.config = loader.ModuleConfig(
@@ -167,7 +161,7 @@ class AFK(loader.Module):
 
     async def reply(self, cid, rid, grp=False):
         last_seen_str = self.format_time(self.config.get("AFK_START_TIME", 0))
-        txt = self.afk_reply.format(last_seen=last_seen_str)
+        txt = self.strings["afk_reply"].format(last_seen=last_seen_str)
         try:
             await self.client.send_message(cid, txt, reply_to=rid)
         except:
@@ -193,7 +187,7 @@ class AFK(loader.Module):
         args = utils.get_args_raw(message)
 
         if not args:
-            await utils.answer(message, self.afk_help_text)
+            await utils.answer(message, self.strings["afk_help_text"])
             return
 
         args = args.replace(',', '.').split()
@@ -204,7 +198,7 @@ class AFK(loader.Module):
             self.config["AFK_DAILY_START"] = self.config["AFK_DAILY_END"] = ""
             self.config["AFK_START_TIME"] = time.time()
             self.config["AFK_END_TIME"] = -1
-            await utils.answer(message, self.afk_on)
+            await utils.answer(message, self.strings["afk_on"])
             return
 
         # Статус (ИЗМЕНЕНО - используем единые шаблоны)
@@ -214,8 +208,8 @@ class AFK(loader.Module):
 
             if ds and de:
                 # Используем единый шаблон для ежедневного статуса
-                activity_status = self.afk_daily_active if self.afk_active else self.afk_daily_inactive
-                msg = self.afk_status_daily_template.format(
+                activity_status = self.strings["afk_daily_active"] if self.afk_active else self.strings["afk_daily_inactive"]
+                msg = self.strings["afk_status_daily_template"].format(
                     start_str=ds,
                     end_str=de,
                     activity_status=activity_status
@@ -230,14 +224,14 @@ class AFK(loader.Module):
                 grp = self.config.get("AFK_GROUP_COUNT", 0)
 
                 if et == -1:
-                    e_str = self.afk_unlimited
-                    r_str = self.afk_remaining_unlimited
+                    e_str = self.strings["afk_unlimited"]
+                    r_str = self.strings["afk_remaining_unlimited"]
                 else:
                     e_str = self.format_time(et)
-                    r_str = self.afk_remaining_hours.format(hours_left=(et - time.time()) / 3600)
+                    r_str = self.strings["afk_remaining_hours"].format(hours_left=(et - time.time()) / 3600)
 
                 # Используем единый шаблон
-                msg = self.afk_status_template.format(
+                msg = self.strings["afk_status_template"].format(
                     start_str=s_str,
                     end_str=e_str,
                     remaining_str=r_str,
@@ -245,19 +239,19 @@ class AFK(loader.Module):
                 )
                 await utils.answer(message, msg)
             else:
-                await utils.answer(message, self.afk_status_inactive)
+                await utils.answer(message, self.strings["afk_status_inactive"])
             return
 
         # Список групп
         if args[0].lower() == "list":
             groups = self.get_groups()
             if not groups:
-                await utils.answer(message, self.afk_groups_list_empty)
+                await utils.answer(message, self.strings["afk_groups_list_empty"])
                 return
 
-            msg = self.afk_groups_list_title
+            msg = self.strings["afk_groups_list_title"]
             for chat_id, name in groups.items():
-                msg += self.afk_groups_list_item.format(name=name, chat_id=chat_id)
+                msg += self.strings["afk_groups_list_item"].format(name=name, chat_id=chat_id)
             await utils.answer(message, msg)
             return
 
@@ -265,13 +259,13 @@ class AFK(loader.Module):
         if args[0].lower() == "reset":
             self.reset()
             self.config["AFK_DAILY_START"] = self.config["AFK_DAILY_END"] = ""
-            await utils.answer(message, self.afk_off)
+            await utils.answer(message, self.strings["afk_off"])
             return
 
         # Группы
         if args[0].lower() == "on":
             if message.is_private:
-                await utils.answer(message, self.not_a_group)
+                await utils.answer(message, self.strings["not_a_group"])
                 return
             try:
                 chat = await message.get_chat()
@@ -282,27 +276,27 @@ class AFK(loader.Module):
             grps = self.get_groups()
             grps[str(message.chat_id)] = chat_name
             self.save_groups(grps)
-            await utils.answer(message, self.afk_group_added)
+            await utils.answer(message, self.strings["afk_group_added"])
             return
 
         if args[0].lower() == "off":
             if message.is_private:
-                await utils.answer(message, self.not_a_group)
+                await utils.answer(message, self.strings["not_a_group"])
                 return
             grps = self.get_groups()
             chat_id_str = str(message.chat_id)
             if chat_id_str in grps:
                 del grps[chat_id_str]
                 self.save_groups(grps)
-                await utils.answer(message, self.afk_group_removed)
+                await utils.answer(message, self.strings["afk_group_removed"])
             else:
-                await utils.answer(message, self.afk_group_not_in_list)
+                await utils.answer(message, self.strings["afk_group_not_in_list"])
             return
 
         # Ежедневный
         if args[0].lower() == "set":
             if len(args) < 3 or not self.is_time(args[1]) or not self.is_time(args[2]):
-                await utils.answer(message, self.invalid_time)
+                await utils.answer(message, self.strings["invalid_time"])
                 return
             
             self.reset()
@@ -311,14 +305,14 @@ class AFK(loader.Module):
             self.config["AFK_DAILY_END"] = e
             self.config["AFK_SCHEDULED_START"] = "" 
             
-            await utils.answer(message, self.afk_scheduled_daily.format(start_str=s, end_str=e))
+            await utils.answer(message, self.strings["afk_scheduled_daily"].format(start_str=s, end_str=e))
             await self.watcher(message, silent=True)
             return
 
         # Два аргумента — время включения/выключения
         if len(args) == 2:
             if not self.is_time(args[0]) or not self.is_time(args[1]):
-                await utils.answer(message, self.invalid_time)
+                await utils.answer(message, self.strings["invalid_time"])
                 return
             
             self.reset()
@@ -328,7 +322,7 @@ class AFK(loader.Module):
             st, et = self.to_timestamp(args[0]), self.to_timestamp(args[1])
             
             if not st or not et:
-                await utils.answer(message, self.invalid_time)
+                await utils.answer(message, self.strings["invalid_time"])
                 return
             if et <= st:
                 et += 86400
@@ -337,7 +331,7 @@ class AFK(loader.Module):
             self.config["AFK_END_TIME"] = et
             self.config["AFK_SCHEDULED_START"] = s_str
             
-            msg = self.afk_one_time.format(
+            msg = self.strings["afk_one_time"].format(
                 start_time=self.format_time(st),
                 end_time=self.format_time(et)
             )
@@ -348,7 +342,7 @@ class AFK(loader.Module):
         if len(args) == 1:
             dur = self.parse_dur(args[0])
             if not dur:
-                await utils.answer(message, self.invalid_time)
+                await utils.answer(message, self.strings["invalid_time"])
                 return
             
             self.reset()
@@ -361,14 +355,14 @@ class AFK(loader.Module):
             self.config["AFK_SCHEDULED_START"] = ""
             
             h, m = int(dur), int((dur - int(dur)) * 60)
-            msg = self.afk_set_time.format(
+            msg = self.strings["afk_set_time"].format(
                 duration=f"{h} ч {m} мин" if m > 0 else f"{h} ч",
                 end_time=self.format_time(et)
             )
             await utils.answer(message, msg)
             return
 
-        await utils.answer(message, self.invalid_time)
+        await utils.answer(message, self.strings["invalid_time"])
 
     @loader.watcher()
     async def watcher(self, message, silent=False):
