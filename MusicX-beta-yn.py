@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-__version__ = (1, 0, 1)
+__version__ = (1, 0, 3)
 # meta developer: FireJester.t.me
 
 import os
@@ -51,6 +51,11 @@ try:
     from mutagen.id3 import ID3, TIT2, TPE1, TALB, APIC, ID3NoHeaderError
 except ImportError:
     ID3 = None
+
+try:
+    from mutagen.mp3 import MP3
+except ImportError:
+    MP3 = None
 
 REQUEST_OK = 200
 MAX_FILE_SIZE = 50 * 1024 * 1024
@@ -170,7 +175,7 @@ class _TagHelper:
     @staticmethod
     def write(filepath, title, artist, album=None, cover_data=None):
         if not ID3:
-            return
+            return False
         try:
             try:
                 tags = ID3(filepath)
@@ -186,8 +191,22 @@ class _TagHelper:
                     type=3, desc="Cover", data=cover_data,
                 ))
             tags.save(filepath)
+            return True
         except Exception:
-            pass
+            return False
+
+    @staticmethod
+    def has_cover(filepath):
+        if not ID3:
+            return False
+        try:
+            tags = ID3(filepath)
+            return any(
+                isinstance(frame, APIC) and len(frame.data) > 500
+                for frame in tags.values()
+            )
+        except Exception:
+            return False
 
 
 class _Converter:
@@ -250,23 +269,40 @@ class MusicSearch(loader.Module):
 
     def __init__(self):
         self.config = loader.ModuleConfig(
-            "YM_TOKEN", "", "Yandex Music access token",
-            "SEARCH_LIMIT", 5, "Number of search results (1-10)",
+            loader.ConfigValue(
+                "YM_TOKEN",
+                "",
+                "Yandex Music access token",
+                validator=loader.validators.Hidden(),
+            ),
+            loader.ConfigValue(
+                "SEARCH_LIMIT",
+                5,
+                "Number of search results (1-10)",
+                validator=loader.validators.Integer(minimum=1, maximum=10),
+            ),
+            loader.ConfigValue(
+                "SEQUENTIAL_DOWNLOAD",
+                False,
+                "Download tracks one by one instead of all at once",
+                validator=loader.validators.Boolean(),
+            ),
         )
         self.inline_bot = None
         self.inline_bot_username = None
         self._ym = None
         self._tmp = None
-        # {cache_key: {track_id: asyncio.Future}}
         self._search_futures = {}
-        # {cache_key: {track_id: {"file_id":..., "title":..., ...} or {"error":...}}}
         self._search_results = {}
-        # {cache_key: [track_info_dict, ...]}
         self._search_tracks_info = {}
+        self._upload_lock = None
+        self._data_lock = None
 
     async def client_ready(self, client, db):
         self._client = client
         self._db = db
+        self._upload_lock = asyncio.Lock()
+        self._data_lock = asyncio.Lock()
         self._tmp = os.path.join(tempfile.gettempdir(), "musicsearch")
         if os.path.exists(self._tmp):
             shutil.rmtree(self._tmp, ignore_errors=True)
@@ -295,6 +331,38 @@ class MusicSearch(loader.Module):
             return max(1, min(10, v))
         except Exception:
             return 5
+
+    async def _upload_to_tg(self, file_bytes, filename, title, artist, dur_s, cover_data, user_id):
+        async with self._upload_lock:
+            audio_inp = BufferedInputFile(file_bytes, filename=filename)
+            thumb_inp = (
+                BufferedInputFile(cover_data, filename="cover.jpg")
+                if cover_data
+                else None
+            )
+            sent = await self.inline_bot.send_audio(
+                chat_id=user_id,
+                audio=audio_inp,
+                title=title,
+                performer=artist,
+                duration=dur_s,
+                thumbnail=thumb_inp,
+            )
+            if sent and sent.audio:
+                file_id = sent.audio.file_id
+                msg_id = sent.message_id
+                await asyncio.sleep(0.5)
+                for attempt in range(5):
+                    try:
+                        await self.inline_bot.delete_message(
+                            chat_id=user_id, message_id=msg_id,
+                        )
+                        break
+                    except Exception:
+                        await asyncio.sleep(1.0 * (attempt + 1))
+                await asyncio.sleep(0.3)
+                return file_id
+            return None
 
     async def _dl_single_track(self, track, user_id):
         ddir = tempfile.mkdtemp(dir=self._tmp)
@@ -344,26 +412,32 @@ class MusicSearch(loader.Module):
                 else:
                     final_mp3 = raw_path
 
-            if cover_data:
+            # Embed cover: try ffmpeg first, then mutagen as fallback
+            if cover_data and final_mp3.endswith(".mp3"):
                 cover_path = os.path.join(ddir, "cover.jpg")
                 with open(cover_path, "wb") as cf:
                     cf.write(cover_data)
 
-                if final_mp3.endswith(".mp3"):
-                    covered = os.path.join(ddir, f"{clean_name}_cover.mp3")
-                    emb_ok = await _Converter.embed_cover(final_mp3, cover_path, covered)
-                    if emb_ok:
-                        try:
-                            os.remove(final_mp3)
-                        except Exception:
-                            pass
-                        final_mp3 = covered
-                    else:
-                        _TagHelper.write(final_mp3, title, artist, album_title, cover_data)
+                covered = os.path.join(ddir, f"{clean_name}_cover.mp3")
+                emb_ok = await _Converter.embed_cover(final_mp3, cover_path, covered)
+                if emb_ok and os.path.exists(covered) and os.path.getsize(covered) > 0:
+                    try:
+                        os.remove(final_mp3)
+                    except Exception:
+                        pass
+                    final_mp3 = covered
                 else:
+                    # ffmpeg failed, use mutagen directly
                     _TagHelper.write(final_mp3, title, artist, album_title, cover_data)
+                    # Verify cover was written
+                    if not _TagHelper.has_cover(final_mp3):
+                        logger.warning(f"[MusicSearch] Cover embed failed for {title}")
             elif final_mp3.endswith(".mp3"):
                 _TagHelper.write(final_mp3, title, artist, album_title)
+
+            # Final verification: if still no cover in file, try one more time
+            if cover_data and final_mp3.endswith(".mp3") and not _TagHelper.has_cover(final_mp3):
+                _TagHelper.write(final_mp3, title, artist, album_title, cover_data)
 
             if not os.path.exists(final_mp3) or os.path.getsize(final_mp3) == 0:
                 return {"error": "Empty file"}
@@ -373,31 +447,14 @@ class MusicSearch(loader.Module):
             with open(final_mp3, "rb") as f:
                 file_bytes = f.read()
 
-            audio_inp = BufferedInputFile(file_bytes, filename=os.path.basename(final_mp3))
-            thumb_inp = (
-                BufferedInputFile(cover_data, filename="cover.jpg")
-                if cover_data
-                else None
+            file_id = await self._upload_to_tg(
+                file_bytes, os.path.basename(final_mp3),
+                title, artist, dur_s, cover_data, user_id,
             )
 
-            sent = await self.inline_bot.send_audio(
-                chat_id=user_id,
-                audio=audio_inp,
-                title=title,
-                performer=artist,
-                duration=dur_s,
-                thumbnail=thumb_inp,
-            )
-
-            if sent and sent.audio:
-                try:
-                    await self.inline_bot.delete_message(
-                        chat_id=user_id, message_id=sent.message_id,
-                    )
-                except Exception:
-                    pass
+            if file_id:
                 return {
-                    "file_id": sent.audio.file_id,
+                    "file_id": file_id,
                     "title": title,
                     "artist": artist,
                     "duration": dur_s,
@@ -411,54 +468,99 @@ class MusicSearch(loader.Module):
             if os.path.exists(ddir):
                 shutil.rmtree(ddir, ignore_errors=True)
 
-    def _start_downloads(self, cache_key, tracks, user_id):
-        if cache_key in self._search_futures:
-            return
-
-        tracks_info = []
-        for t in tracks:
-            tracks_info.append({
-                "track_id": str(t.track_id),
-                "artist": _track_artist(t),
-                "title": _track_title(t),
-                "duration_ms": t.duration_ms or 0,
-                "cover_url": _YMSearch.get_cover_url(t, size="200x200"),
-            })
-        self._search_tracks_info[cache_key] = tracks_info
-
+    async def _download_all_parallel(self, cache_key, tracks, user_id):
         futures = {}
         for t in tracks:
             tid = str(t.track_id)
             futures[tid] = asyncio.ensure_future(
                 self._dl_single_track(t, user_id)
             )
-        self._search_futures[cache_key] = futures
-        self._search_results[cache_key] = {}
+        async with self._data_lock:
+            self._search_futures[cache_key] = futures
+            self._search_results[cache_key] = {}
 
-    def _collect_results(self, cache_key):
-        futures = self._search_futures.get(cache_key, {})
-        results = self._search_results.get(cache_key, {})
+    async def _download_all_sequential(self, cache_key, tracks, user_id):
+        # Create placeholder futures dict so UI knows about all tracks
+        placeholder_futures = {}
+        for t in tracks:
+            tid = str(t.track_id)
+            loop = asyncio.get_event_loop()
+            fut = loop.create_future()
+            placeholder_futures[tid] = fut
 
-        for tid, fut in futures.items():
-            if tid not in results and fut.done():
-                try:
-                    results[tid] = fut.result()
-                except Exception:
-                    results[tid] = {"error": "Internal error"}
+        async with self._data_lock:
+            self._search_futures[cache_key] = placeholder_futures
+            self._search_results[cache_key] = {}
 
-        self._search_results[cache_key] = results
-        return results
+        # Download one by one
+        for t in tracks:
+            tid = str(t.track_id)
+            try:
+                result = await self._dl_single_track(t, user_id)
+            except Exception as e:
+                result = {"error": str(e)[:80]}
+            async with self._data_lock:
+                self._search_results[cache_key][tid] = result
+                if not placeholder_futures[tid].done():
+                    placeholder_futures[tid].set_result(result)
 
-    def _all_done(self, cache_key):
-        futures = self._search_futures.get(cache_key, {})
-        return all(f.done() for f in futures.values())
+    async def _start_downloads(self, cache_key, tracks, user_id):
+        async with self._data_lock:
+            if cache_key in self._search_futures:
+                return
 
-    def _build_inline_results(self, cache_key):
-        tracks_info = self._search_tracks_info.get(cache_key, [])
-        results_map = self._collect_results(cache_key)
+            tracks_info = []
+            for t in tracks:
+                tracks_info.append({
+                    "track_id": str(t.track_id),
+                    "artist": _track_artist(t),
+                    "title": _track_title(t),
+                    "duration_ms": t.duration_ms or 0,
+                    "cover_url": _YMSearch.get_cover_url(t, size="200x200"),
+                })
+            self._search_tracks_info[cache_key] = tracks_info
+
+        if self.config["SEQUENTIAL_DOWNLOAD"]:
+            asyncio.ensure_future(
+                self._download_all_sequential(cache_key, tracks, user_id)
+            )
+        else:
+            await self._download_all_parallel(cache_key, tracks, user_id)
+
+    async def _collect_results(self, cache_key):
+        async with self._data_lock:
+            futures = self._search_futures.get(cache_key, {})
+            results = self._search_results.get(cache_key, {})
+
+            for tid, fut in futures.items():
+                if tid not in results and fut.done():
+                    try:
+                        results[tid] = fut.result()
+                    except Exception:
+                        results[tid] = {"error": "Internal error"}
+
+            self._search_results[cache_key] = results
+            return dict(results)
+
+    async def _all_done(self, cache_key):
+        async with self._data_lock:
+            futures = self._search_futures.get(cache_key, {})
+            if not futures:
+                return False
+            return all(f.done() for f in futures.values())
+
+    async def _get_tracks_info(self, cache_key):
+        async with self._data_lock:
+            return list(self._search_tracks_info.get(cache_key, []))
+
+    async def _has_cache(self, cache_key):
+        async with self._data_lock:
+            return cache_key in self._search_futures
+
+    def _build_inline_results(self, tracks_info, results_map):
         inline_results = []
 
-        for i, info in enumerate(tracks_info):
+        for info in tracks_info:
             tid = info["track_id"]
             artist = info["artist"]
             title = info["title"]
@@ -535,17 +637,12 @@ class MusicSearch(loader.Module):
         limit = self._get_limit()
         cache_key = f"ymsearch_{text.lower().replace(' ', '_')[:60]}"
 
-        if cache_key in self._search_futures:
-            self._collect_results(cache_key)
-            inline_results = self._build_inline_results(cache_key)
+        has_cache = await self._has_cache(cache_key)
 
-            if self._all_done(cache_key):
-                has_any_file = any(
-                    "file_id" in self._search_results.get(cache_key, {}).get(tid, {})
-                    for tid in self._search_futures.get(cache_key, {})
-                )
-                if has_any_file:
-                    pass
+        if has_cache:
+            results_map = await self._collect_results(cache_key)
+            tracks_info = await self._get_tracks_info(cache_key)
+            inline_results = self._build_inline_results(tracks_info, results_map)
 
             if inline_results:
                 try:
@@ -566,9 +663,11 @@ class MusicSearch(loader.Module):
             await self._msg(query, "Not found", f"No results for: {text}")
             return
 
-        self._start_downloads(cache_key, tracks, query.from_user.id)
+        await self._start_downloads(cache_key, tracks, query.from_user.id)
 
-        inline_results = self._build_inline_results(cache_key)
+        tracks_info = await self._get_tracks_info(cache_key)
+        results_map = await self._collect_results(cache_key)
+        inline_results = self._build_inline_results(tracks_info, results_map)
 
         try:
             await self.inline_bot.answer_inline_query(
