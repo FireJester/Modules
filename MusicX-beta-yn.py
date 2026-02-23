@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-__version__ = (1, 0, 0)
+__version__ = (1, 0, 1)
 # meta developer: FireJester.t.me
 
 import os
@@ -69,6 +69,16 @@ def _fmt_dur(ms):
     return f"{s // 60}:{s % 60:02d}" if s > 0 else "0:00"
 
 
+def _track_artist(track):
+    if track.artists:
+        return ", ".join(a.name for a in track.artists if a.name) or "Unknown"
+    return "Unknown"
+
+
+def _track_title(track):
+    return track.title or "Unknown"
+
+
 class _YMSearch:
     def __init__(self):
         self._token = None
@@ -98,7 +108,7 @@ class _YMSearch:
         self._client = None
         self._ok = False
 
-    async def search_track(self, query, count=1):
+    async def search_track(self, query, count=5):
         if not self._client:
             return []
         try:
@@ -149,7 +159,8 @@ class _YMSearch:
         except Exception:
             return None
 
-    def get_cover_url(self, track, size="200x200"):
+    @staticmethod
+    def get_cover_url(track, size="200x200"):
         if not track.cover_uri:
             return None
         return f"https://{track.cover_uri.replace('%%', size)}"
@@ -240,12 +251,18 @@ class MusicSearch(loader.Module):
     def __init__(self):
         self.config = loader.ModuleConfig(
             "YM_TOKEN", "", "Yandex Music access token",
+            "SEARCH_LIMIT", 5, "Number of search results (1-10)",
         )
         self.inline_bot = None
         self.inline_bot_username = None
         self._ym = None
         self._tmp = None
+        # {cache_key: {track_id: asyncio.Future}}
         self._search_futures = {}
+        # {cache_key: {track_id: {"file_id":..., "title":..., ...} or {"error":...}}}
+        self._search_results = {}
+        # {cache_key: [track_info_dict, ...]}
+        self._search_tracks_info = {}
 
     async def client_ready(self, client, db):
         self._client = client
@@ -272,13 +289,18 @@ class MusicSearch(loader.Module):
             return True
         return await self._ym.auth(token)
 
-    async def _dl_and_upload(self, track, user_id, cache_key):
+    def _get_limit(self):
+        try:
+            v = int(self.config["SEARCH_LIMIT"])
+            return max(1, min(10, v))
+        except Exception:
+            return 5
+
+    async def _dl_single_track(self, track, user_id):
         ddir = tempfile.mkdtemp(dir=self._tmp)
         try:
-            artist = "Unknown"
-            if track.artists:
-                artist = ", ".join(a.name for a in track.artists if a.name) or "Unknown"
-            title = track.title or "Unknown"
+            artist = _track_artist(track)
+            title = _track_title(track)
             album_title = ""
             if track.albums:
                 album_title = track.albums[0].title or ""
@@ -389,6 +411,109 @@ class MusicSearch(loader.Module):
             if os.path.exists(ddir):
                 shutil.rmtree(ddir, ignore_errors=True)
 
+    def _start_downloads(self, cache_key, tracks, user_id):
+        if cache_key in self._search_futures:
+            return
+
+        tracks_info = []
+        for t in tracks:
+            tracks_info.append({
+                "track_id": str(t.track_id),
+                "artist": _track_artist(t),
+                "title": _track_title(t),
+                "duration_ms": t.duration_ms or 0,
+                "cover_url": _YMSearch.get_cover_url(t, size="200x200"),
+            })
+        self._search_tracks_info[cache_key] = tracks_info
+
+        futures = {}
+        for t in tracks:
+            tid = str(t.track_id)
+            futures[tid] = asyncio.ensure_future(
+                self._dl_single_track(t, user_id)
+            )
+        self._search_futures[cache_key] = futures
+        self._search_results[cache_key] = {}
+
+    def _collect_results(self, cache_key):
+        futures = self._search_futures.get(cache_key, {})
+        results = self._search_results.get(cache_key, {})
+
+        for tid, fut in futures.items():
+            if tid not in results and fut.done():
+                try:
+                    results[tid] = fut.result()
+                except Exception:
+                    results[tid] = {"error": "Internal error"}
+
+        self._search_results[cache_key] = results
+        return results
+
+    def _all_done(self, cache_key):
+        futures = self._search_futures.get(cache_key, {})
+        return all(f.done() for f in futures.values())
+
+    def _build_inline_results(self, cache_key):
+        tracks_info = self._search_tracks_info.get(cache_key, [])
+        results_map = self._collect_results(cache_key)
+        inline_results = []
+
+        for i, info in enumerate(tracks_info):
+            tid = info["track_id"]
+            artist = info["artist"]
+            title = info["title"]
+            cover_url = info["cover_url"]
+            dur_str = _fmt_dur(info["duration_ms"])
+
+            res = results_map.get(tid)
+
+            if res and "file_id" in res:
+                inline_results.append(
+                    InlineQueryResultCachedAudio(
+                        id=f"audio_{tid}_{int(time.time())}",
+                        audio_file_id=res["file_id"],
+                    )
+                )
+            elif res and "error" in res:
+                inline_results.append(
+                    InlineQueryResultArticle(
+                        id=f"err_{tid}_{int(time.time())}",
+                        title=f"{artist} - {title}",
+                        description=f"Error: {res['error']}",
+                        input_message_content=InputTextMessageContent(
+                            message_text=(
+                                f"<b>MusicSearch:</b> Error downloading "
+                                f"<b>{_escape_html(artist)} - {_escape_html(title)}</b>: "
+                                f"{_escape_html(res['error'])}"
+                            ),
+                            parse_mode="HTML",
+                        ),
+                        thumbnail_url=cover_url,
+                        thumbnail_width=200,
+                        thumbnail_height=200,
+                    )
+                )
+            else:
+                inline_results.append(
+                    InlineQueryResultArticle(
+                        id=f"dl_{tid}_{int(time.time())}",
+                        title=f"{artist} - {title} [{dur_str}]",
+                        description="Downloading... Repeat query in ~10 sec",
+                        input_message_content=InputTextMessageContent(
+                            message_text=(
+                                f"<b>MusicSearch:</b> Downloading "
+                                f"<b>{_escape_html(artist)} - {_escape_html(title)}</b>..."
+                            ),
+                            parse_mode="HTML",
+                        ),
+                        thumbnail_url=cover_url,
+                        thumbnail_width=200,
+                        thumbnail_height=200,
+                    )
+                )
+
+        return inline_results
+
     @loader.inline_handler(ru_doc="Поиск музыки в Яндекс Музыке")
     async def musicsearch_inline_handler(self, query: InlineQuery):
         raw = query.query.strip()
@@ -407,102 +532,48 @@ class MusicSearch(loader.Module):
             await self._msg(query, "Not authorized", "Set YM_TOKEN in config")
             return
 
+        limit = self._get_limit()
         cache_key = f"ymsearch_{text.lower().replace(' ', '_')[:60]}"
 
         if cache_key in self._search_futures:
-            fut = self._search_futures[cache_key]
-            if fut.done():
-                self._search_futures.pop(cache_key, None)
-                try:
-                    result = fut.result()
-                except Exception:
-                    result = {"error": "Internal error"}
-                if "error" in result:
-                    await self._msg(query, "Error", result["error"])
-                elif "file_id" in result:
-                    await self._send_cached(query, result, cache_key)
-                return
-            else:
-                await self._wait_msg(query, text)
-                return
+            self._collect_results(cache_key)
+            inline_results = self._build_inline_results(cache_key)
 
-        tracks = await self._ym.search_track(text, count=1)
+            if self._all_done(cache_key):
+                has_any_file = any(
+                    "file_id" in self._search_results.get(cache_key, {}).get(tid, {})
+                    for tid in self._search_futures.get(cache_key, {})
+                )
+                if has_any_file:
+                    pass
+
+            if inline_results:
+                try:
+                    await self.inline_bot.answer_inline_query(
+                        inline_query_id=query.id,
+                        results=inline_results,
+                        cache_time=0,
+                        is_personal=True,
+                    )
+                except Exception:
+                    pass
+            else:
+                await self._hint(query)
+            return
+
+        tracks = await self._ym.search_track(text, count=limit)
         if not tracks:
             await self._msg(query, "Not found", f"No results for: {text}")
             return
 
-        track = tracks[0]
-        artist = "Unknown"
-        if track.artists:
-            artist = ", ".join(a.name for a in track.artists if a.name) or "Unknown"
-        title = track.title or "Unknown"
+        self._start_downloads(cache_key, tracks, query.from_user.id)
 
-        self._search_futures[cache_key] = asyncio.ensure_future(
-            self._dl_and_upload(track, query.from_user.id, cache_key)
-        )
-
-        cover_url = self._ym.get_cover_url(track, size="200x200")
+        inline_results = self._build_inline_results(cache_key)
 
         try:
             await self.inline_bot.answer_inline_query(
                 inline_query_id=query.id,
-                results=[
-                    InlineQueryResultArticle(
-                        id=f"loading_{int(time.time())}",
-                        title=f"{artist} - {title}",
-                        description="Downloading... Repeat query in ~10 sec",
-                        input_message_content=InputTextMessageContent(
-                            message_text=(
-                                f"<b>MusicSearch:</b> Downloading "
-                                f"<b>{_escape_html(artist)} - {_escape_html(title)}</b>..."
-                            ),
-                            parse_mode="HTML",
-                        ),
-                        thumbnail_url=cover_url,
-                        thumbnail_width=200,
-                        thumbnail_height=200,
-                    )
-                ],
-                cache_time=0,
-                is_personal=True,
-            )
-        except Exception:
-            pass
-
-    async def _send_cached(self, query, result, cache_key):
-        try:
-            await self.inline_bot.answer_inline_query(
-                inline_query_id=query.id,
-                results=[
-                    InlineQueryResultCachedAudio(
-                        id=f"{cache_key}_{int(time.time())}",
-                        audio_file_id=result["file_id"],
-                    )
-                ],
-                cache_time=0,
-                is_personal=True,
-            )
-        except Exception:
-            pass
-
-    async def _wait_msg(self, query, text):
-        try:
-            await self.inline_bot.answer_inline_query(
-                inline_query_id=query.id,
-                results=[
-                    InlineQueryResultArticle(
-                        id=f"wait_{int(time.time())}",
-                        title="Downloading track...",
-                        description="Please wait and repeat the query",
-                        input_message_content=InputTextMessageContent(
-                            message_text=(
-                                "<b>MusicSearch:</b> Track is being downloaded. "
-                                "Please wait and try again."
-                            ),
-                            parse_mode="HTML",
-                        ),
-                    )
-                ],
+                results=inline_results,
                 cache_time=0,
                 is_personal=True,
             )
@@ -554,8 +625,11 @@ class MusicSearch(loader.Module):
             pass
 
     async def on_unload(self):
-        for fut in self._search_futures.values():
-            fut.cancel()
+        for futs in self._search_futures.values():
+            for fut in futs.values():
+                fut.cancel()
         self._search_futures.clear()
+        self._search_results.clear()
+        self._search_tracks_info.clear()
         if self._tmp and os.path.exists(self._tmp):
             shutil.rmtree(self._tmp, ignore_errors=True)
