@@ -51,7 +51,7 @@ class DeleteMusic(loader.Module):
             me = await self.client.get_input_entity("me")
             music = await self.client(GetSavedMusic(me, 0, 100, 0))
             if not music or not music.documents:
-                return await utils.answer(message, "Error: no tracks in your account")
+                return await utils.answer(message, "Error: no tracks in your profile")
             c = 0
             while music and music.documents:
                 for doc in music.documents:
