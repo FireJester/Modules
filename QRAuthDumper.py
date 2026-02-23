@@ -254,7 +254,7 @@ class QRAuthDumper(loader.Module):
         tc = TelegramClient(
             StringSession(), api_id, api_hash,
             device_model="QRAuthDumper",
-            system_version="Hikka Userbot",
+            system_version="By @FireJester",
             app_version=f"v{'.'.join(map(str, __version__))}",
         )
 
