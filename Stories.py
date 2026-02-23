@@ -272,7 +272,7 @@ class Stories(loader.Module):
         return (None, None)
 
     @loader.command(
-        en_doc="-instruction for module",
+        en_doc="- instruction for module",
         ru_doc="- инструкция к модулю"
     )
     async def storiescmd(self, message):
