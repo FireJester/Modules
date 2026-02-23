@@ -1,4 +1,4 @@
-__version__ = (1,0)
+__version__ = (1,0,0)
 
 # module: Gift
 # meta developer: GXDEE.t.me
