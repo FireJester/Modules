@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-__version__ = (2, 0, 0)
+__version__ = (2, 1, 0)
 # meta developer: FireJester.t.me
 
 import os
@@ -13,7 +13,6 @@ import shutil
 import asyncio
 import subprocess
 import sys
-import collections
 
 from aiogram.types import (
     InlineQuery,
@@ -80,7 +79,6 @@ MAX_FILE_SIZE = 50 * 1024 * 1024
 MAX_CONCURRENT = 15
 SEG_TIMEOUT = 30
 CACHE_TTL = 600
-MAX_LOG_ENTRIES = 200
 
 VK_AUDIO_RE = re.compile(
     r"https?://(?:www\.)?(?:vk\.com|vk\.ru)/audio(-?\d+)_(\d+)(?:_([a-f0-9]+))?"
@@ -253,39 +251,26 @@ def _detect_token_source(text):
     return None
 
 
-def normalize_cover(raw_data, max_size=600):
+def normalize_cover(raw_data, max_size=None):
     if not raw_data or len(raw_data) < 100:
         return None
     try:
+        is_png = raw_data[:8] == b'\x89PNG\r\n\x1a\n'
         img = Image.open(io.BytesIO(raw_data))
-        img = img.convert("RGB")
         w, h = img.size
-        if w > max_size or h > max_size:
+        needs_resize = max_size is not None and (w > max_size or h > max_size)
+        if is_png and not needs_resize:
+            return raw_data
+        img = img.convert("RGB")
+        if needs_resize:
             ratio = min(max_size / w, max_size / h)
             img = img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
         buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=85, optimize=True)
+        img.save(buf, format="PNG")
         result = buf.getvalue()
         return result if len(result) >= 100 else None
     except Exception:
         return None
-
-
-class ModuleLog:
-    def __init__(self, maxlen=MAX_LOG_ENTRIES):
-        self._entries = collections.deque(maxlen=maxlen)
-
-    def log(self, tag, msg):
-        ts = time.strftime("%H:%M:%S")
-        entry = f"[{ts}] [{tag}] {msg}"
-        self._entries.append(entry)
-        logger.info(f"[MusicX] {entry}")
-
-    def get_last(self, n=50):
-        return list(self._entries)[-n:]
-
-    def clear(self):
-        self._entries.clear()
 
 
 class CoverFetcher:
@@ -344,7 +329,7 @@ class CoverFetcher:
         return url
 
     @staticmethod
-    async def download_ym_cover(cover_uri, size="600x600"):
+    async def download_ym_cover(cover_uri, size="1000x1000"):
         if not cover_uri:
             return None
         url = f"https://{cover_uri.replace('%%', size)}"
@@ -380,7 +365,9 @@ class TagHelper:
             if album:
                 tags.add(TALB(encoding=3, text=[album]))
             if cover_data and len(cover_data) > 500:
-                tags.add(APIC(encoding=3, mime="image/jpeg", type=3, desc="Cover", data=cover_data))
+                is_png = cover_data[:8] == b'\x89PNG\r\n\x1a\n'
+                mime = "image/png" if is_png else "image/jpeg"
+                tags.add(APIC(encoding=3, mime=mime, type=3, desc="Cover", data=cover_data))
             tags.save(filepath)
             return True
         except Exception:
@@ -421,8 +408,11 @@ class Converter:
             proc = await asyncio.create_subprocess_exec(
                 "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
                 "-i", mp3_path, "-i", cover_path,
-                "-map", "0:a", "-map", "1:0", "-c:a", "copy", "-id3v2_version", "3",
-                "-metadata:s:v", "title=Cover", "-metadata:s:v", "comment=Cover (front)",
+                "-map", "0:a", "-map", "1:0",
+                "-c:a", "copy", "-c:v", "copy",
+                "-id3v2_version", "3",
+                "-metadata:s:v", "title=Cover",
+                "-metadata:s:v", "comment=Cover (front)",
                 "-disposition:v", "attached_pic", out_path,
                 stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE,
             )
@@ -621,7 +611,7 @@ class YMApiClient:
         try:
             if not track.cover_uri:
                 return False
-            await track.download_cover_async(filepath, size="600x600")
+            await track.download_cover_async(filepath, size="1000x1000")
             return os.path.exists(filepath) and os.path.getsize(filepath) > 500
         except Exception:
             return False
@@ -843,18 +833,28 @@ class YTDownloader:
             return None
         if os.path.getsize(final_mp3) > MAX_FILE_SIZE:
             return {"error": "too_big"}
-        cover_data = None
+        raw_cover = None
         if thumbnail_url:
-            cover_data = await self._download_thumbnail(thumbnail_url)
+            raw_cover = await self._download_thumbnail(thumbnail_url)
+        cover_data = normalize_cover(raw_cover) if raw_cover else None
+        thumb_data = normalize_cover(raw_cover, max_size=320) if raw_cover else None
         if cover_data and final_mp3.endswith(".mp3"):
-            TagHelper.write(final_mp3, title, uploader, cover_data=cover_data)
+            cover_path = os.path.join(ddir, "cover.png")
+            with open(cover_path, "wb") as cf:
+                cf.write(cover_data)
+            covered_mp3 = os.path.join(ddir, f"{safe_name}_cover.mp3")
+            if await Converter.embed_cover(final_mp3, cover_path, covered_mp3):
+                try:
+                    os.remove(final_mp3)
+                except Exception:
+                    pass
+                final_mp3 = covered_mp3
+            else:
+                TagHelper.write(final_mp3, title, uploader, cover_data=cover_data)
         elif final_mp3.endswith(".mp3"):
             TagHelper.write(final_mp3, title, uploader)
-        thumb_data = None
-        if cover_data:
-            thumb_data = normalize_cover(cover_data, max_size=320)
-            if not thumb_data:
-                thumb_data = cover_data
+        if not thumb_data and cover_data:
+            thumb_data = cover_data
         return {
             "file": final_mp3,
             "track": {
@@ -894,12 +894,10 @@ class YTDownloader:
                     if resp.status != REQUEST_OK:
                         return None
                     data = await resp.read()
-                    if len(data) < 1000:
-                        return None
-                    normalized = normalize_cover(data, max_size=600)
-                    return normalized if normalized else data
+                    return data if len(data) >= 1000 else None
         except Exception:
-            return None 
+            return None
+
 
 @loader.tds
 class MusicX(loader.Module):
@@ -922,7 +920,6 @@ class MusicX(loader.Module):
             "<code>.musicx token URL</code> - submit token\n"
             "<code>.musicx status</code> - check auth\n"
             "<code>.musicx logout vk/ym</code> - log out\n"
-            "<code>.musicx log</code> - debug log\n"
             "\n{line}"
         ),
         "auth_links": (
@@ -958,7 +955,7 @@ class MusicX(loader.Module):
             loader.ConfigValue("VK_TOKEN", "", "VK access token", validator=loader.validators.Hidden()),
             loader.ConfigValue("YM_TOKEN", "", "Yandex Music access token", validator=loader.validators.Hidden()),
             loader.ConfigValue("SEARCH_LIMIT", 3, "Results per platform (1-10)", validator=loader.validators.Integer(minimum=1, maximum=10)),
-            loader.ConfigValue("SEQUENTIAL_DOWNLOAD", False, "Download one by one", validator=loader.validators.Boolean()),
+            loader.ConfigValue("SEQUENTIAL_DOWNLOAD", True, "Download one by one", validator=loader.validators.Boolean()),
         )
         self.inline_bot = None
         self.inline_bot_username = None
@@ -967,7 +964,6 @@ class MusicX(loader.Module):
         self._ym = None
         self._vk_dl = None
         self._yt_dl = None
-        self._log = ModuleLog()
         self._pending_futures = {}
         self._search_futures = {}
         self._search_results = {}
@@ -996,7 +992,6 @@ class MusicX(loader.Module):
             except Exception:
                 pass
         self._cleanup_cache_db()
-        self._log.log("INIT", "Module loaded")
 
     async def _ensure_vk(self):
         token = self.config["VK_TOKEN"]
@@ -1087,8 +1082,6 @@ class MusicX(loader.Module):
             await self._cmd_status(message)
         elif cmd == "logout":
             await self._cmd_logout(message, args_list)
-        elif cmd == "log":
-            await self._cmd_log(message, args_list)
         else:
             await self._cmd_help(message)
 
@@ -1176,37 +1169,16 @@ class MusicX(loader.Module):
         else:
             await utils.answer(message, self.strings["logout_unknown"])
 
-    async def _cmd_log(self, message, args_list):
-        arg = args_list[1] if len(args_list) > 1 else ""
-        if arg.lower() == "clear":
-            self._log.clear()
-            await utils.answer(message, "<b>MusicX log cleared.</b>")
-            return
-        try:
-            count = int(arg) if arg.isdigit() else 50
-        except Exception:
-            count = 50
-        entries = self._log.get_last(count)
-        if not entries:
-            await utils.answer(message, "<b>MusicX log is empty.</b>")
-            return
-        full = "\n".join(entries)
-        if len(full) > 4000:
-            full = full[-4000:]
-        await utils.answer(message, f"<b>MusicX Log:</b>\n<pre>{escape_html(full)}</pre>")
-
     async def _upload_to_tg(self, file_bytes, filename, title, artist, dur_s, thumb_data, user_id):
         async with self._upload_lock:
-            self._log.log("UPLOAD", f"{artist} - {title} | size={len(file_bytes)} | thumb={len(thumb_data) if thumb_data else 0}")
             audio_inp = BufferedInputFile(file_bytes, filename=filename)
-            thumb_inp = BufferedInputFile(thumb_data, filename="cover.jpg") if thumb_data else None
+            thumb_inp = BufferedInputFile(thumb_data, filename="cover.png") if thumb_data else None
             try:
                 sent = await self.inline_bot.send_audio(
                     chat_id=user_id, audio=audio_inp, title=title,
                     performer=artist, duration=dur_s, thumbnail=thumb_inp,
                 )
-            except Exception as e:
-                self._log.log("UPLOAD", f"FAILED: {e}")
+            except Exception:
                 return None
             if sent and sent.audio:
                 file_id = sent.audio.file_id
@@ -1220,7 +1192,6 @@ class MusicX(loader.Module):
                         await asyncio.sleep(1.0 * (attempt + 1))
                 await asyncio.sleep(0.3)
                 return file_id
-            self._log.log("UPLOAD", "No audio in response")
             return None
 
     async def _vk_link_dl(self, owner, aid):
@@ -1243,8 +1214,8 @@ class MusicX(loader.Module):
             if thumb_url:
                 thumb_url = await CoverFetcher.try_bigger_vk(thumb_url)
             raw_cover = await CoverFetcher.download_image(thumb_url) if thumb_url else None
-            cover_data = normalize_cover(raw_cover, 600) if raw_cover else raw_cover
-            thumb_data = normalize_cover(cover_data, 320) if cover_data else cover_data
+            cover_data = normalize_cover(raw_cover) if raw_cover else None
+            thumb_data = normalize_cover(raw_cover, max_size=320) if raw_cover else None
             ext = "ts" if ".m3u8" in url else "mp3"
             raw = os.path.join(ddir, f"raw.{ext}")
             if not await self._vk_dl.dl(url, raw):
@@ -1271,7 +1242,18 @@ class MusicX(loader.Module):
             if os.path.getsize(mp3) > MAX_FILE_SIZE:
                 return {"error": "too_big", "dir": ddir}
             if cover_data and mp3.endswith(".mp3"):
-                TagHelper.write(mp3, title, artist, cover_data=cover_data)
+                cover_path = os.path.join(ddir, "cover.png")
+                with open(cover_path, "wb") as cf:
+                    cf.write(cover_data)
+                covered_mp3 = os.path.join(ddir, f"{name}_cover.mp3")
+                if await Converter.embed_cover(mp3, cover_path, covered_mp3):
+                    try:
+                        os.remove(mp3)
+                    except Exception:
+                        pass
+                    mp3 = covered_mp3
+                else:
+                    TagHelper.write(mp3, title, artist, cover_data=cover_data)
             elif mp3.endswith(".mp3"):
                 TagHelper.write(mp3, title, artist)
             return {"file": mp3, "dir": ddir, "track": {"title": title, "artist": artist, "duration": dur, "thumb_data": thumb_data}}
@@ -1291,8 +1273,8 @@ class MusicX(loader.Module):
             album_title = track.albums[0].title if track.albums else ""
             dur = int((track.duration_ms or 0) / 1000)
             raw_cover = await CoverFetcher.download_ym_cover(track.cover_uri) if track.cover_uri else None
-            cover_data = normalize_cover(raw_cover, 600) if raw_cover else raw_cover
-            thumb_data = normalize_cover(cover_data, 320) if cover_data else cover_data
+            cover_data = normalize_cover(raw_cover) if raw_cover else None
+            thumb_data = normalize_cover(raw_cover, max_size=320) if raw_cover else None
             raw_path = os.path.join(ddir, "raw_track")
             dl_ok = await self._ym.download_track_file(track, raw_path)
             if not dl_ok:
@@ -1326,7 +1308,18 @@ class MusicX(loader.Module):
             if os.path.getsize(final_mp3) > MAX_FILE_SIZE:
                 return {"error": "too_big", "dir": ddir}
             if cover_data and final_mp3.endswith(".mp3"):
-                TagHelper.write(final_mp3, title, artist, album_title, cover_data)
+                cover_path = os.path.join(ddir, "cover.png")
+                with open(cover_path, "wb") as cf:
+                    cf.write(cover_data)
+                covered_mp3 = os.path.join(ddir, f"{clean_name}_cover.mp3")
+                if await Converter.embed_cover(final_mp3, cover_path, covered_mp3):
+                    try:
+                        os.remove(final_mp3)
+                    except Exception:
+                        pass
+                    final_mp3 = covered_mp3
+                else:
+                    TagHelper.write(final_mp3, title, artist, album_title, cover_data)
             elif final_mp3.endswith(".mp3"):
                 TagHelper.write(final_mp3, title, artist, album_title)
             return {"file": final_mp3, "dir": ddir, "track": {"title": title, "artist": artist, "duration": dur, "thumb_data": thumb_data}}
@@ -1401,12 +1394,10 @@ class MusicX(loader.Module):
         title = track_info["title"]
         url = track_info["url"]
         dur = track_info["duration"]
-        tid = track_info["tid"]
-        self._log.log("DL_VK", f"START: {artist} - {title} ({tid})")
         try:
             cover_url, raw_cover = await self._resolve_vk_cover(track_info)
-            cover_data = normalize_cover(raw_cover, 600) if raw_cover else raw_cover
-            thumb_data = normalize_cover(cover_data, 320) if cover_data else cover_data
+            cover_data = normalize_cover(raw_cover) if raw_cover else None
+            thumb_data = normalize_cover(raw_cover, max_size=320) if raw_cover else None
             ext = "ts" if ".m3u8" in url else "mp3"
             raw = os.path.join(ddir, f"raw.{ext}")
             if not await self._vk_dl.dl(url, raw):
@@ -1435,18 +1426,27 @@ class MusicX(loader.Module):
             if os.path.getsize(final_mp3) > MAX_FILE_SIZE:
                 return {"error": "File > 50 MB"}
             if cover_data and final_mp3.endswith(".mp3"):
-                TagHelper.write(final_mp3, title, artist, cover_data=cover_data)
+                cover_path = os.path.join(ddir, "cover.png")
+                with open(cover_path, "wb") as cf:
+                    cf.write(cover_data)
+                covered_mp3 = os.path.join(ddir, f"{clean_name}_cover.mp3")
+                if await Converter.embed_cover(final_mp3, cover_path, covered_mp3):
+                    try:
+                        os.remove(final_mp3)
+                    except Exception:
+                        pass
+                    final_mp3 = covered_mp3
+                else:
+                    TagHelper.write(final_mp3, title, artist, cover_data=cover_data)
             elif final_mp3.endswith(".mp3"):
                 TagHelper.write(final_mp3, title, artist)
             with open(final_mp3, "rb") as f:
                 file_bytes = f.read()
             file_id = await self._upload_to_tg(file_bytes, os.path.basename(final_mp3), title, artist, dur, thumb_data, user_id)
             if file_id:
-                self._log.log("DL_VK", f"DONE: {artist} - {title}")
                 return {"file_id": file_id, "title": title, "artist": artist, "duration": dur}
             return {"error": "Upload failed"}
         except Exception as e:
-            self._log.log("DL_VK", f"EXCEPTION: {e}")
             return {"error": str(e)[:80]}
         finally:
             if os.path.exists(ddir):
@@ -1456,8 +1456,6 @@ class MusicX(loader.Module):
         ddir = tempfile.mkdtemp(dir=self._tmp)
         artist = YMApiClient.track_artist(track)
         title = YMApiClient.track_title(track)
-        tid = str(track.track_id)
-        self._log.log("DL_YM", f"START: {artist} - {title} ({tid})")
         try:
             album_title = track.albums[0].title if track.albums else ""
             dur_s = (track.duration_ms or 0) // 1000
@@ -1467,8 +1465,8 @@ class MusicX(loader.Module):
             if len(audio_data) > MAX_FILE_SIZE:
                 return {"error": "File > 50 MB"}
             raw_cover = await CoverFetcher.download_ym_cover(track.cover_uri) if track.cover_uri else None
-            cover_data = normalize_cover(raw_cover, 600) if raw_cover else raw_cover
-            thumb_data = normalize_cover(cover_data, 320) if cover_data else cover_data
+            cover_data = normalize_cover(raw_cover) if raw_cover else None
+            thumb_data = normalize_cover(raw_cover, max_size=320) if raw_cover else None
             clean_name = sanitize_fn(f"{artist} - {title}")
             raw_path = os.path.join(ddir, f"{clean_name}_raw")
             with open(raw_path, "wb") as f:
@@ -1492,7 +1490,18 @@ class MusicX(loader.Module):
                 else:
                     final_mp3 = raw_path
             if cover_data and final_mp3.endswith(".mp3"):
-                TagHelper.write(final_mp3, title, artist, album_title, cover_data)
+                cover_path = os.path.join(ddir, "cover.png")
+                with open(cover_path, "wb") as cf:
+                    cf.write(cover_data)
+                covered_mp3 = os.path.join(ddir, f"{clean_name}_cover.mp3")
+                if await Converter.embed_cover(final_mp3, cover_path, covered_mp3):
+                    try:
+                        os.remove(final_mp3)
+                    except Exception:
+                        pass
+                    final_mp3 = covered_mp3
+                else:
+                    TagHelper.write(final_mp3, title, artist, album_title, cover_data)
             elif final_mp3.endswith(".mp3"):
                 TagHelper.write(final_mp3, title, artist, album_title)
             if not os.path.exists(final_mp3) or os.path.getsize(final_mp3) == 0:
@@ -1501,11 +1510,9 @@ class MusicX(loader.Module):
                 file_bytes = f.read()
             file_id = await self._upload_to_tg(file_bytes, os.path.basename(final_mp3), title, artist, dur_s, thumb_data, user_id)
             if file_id:
-                self._log.log("DL_YM", f"DONE: {artist} - {title}")
                 return {"file_id": file_id, "title": title, "artist": artist, "duration": dur_s}
             return {"error": "Upload failed"}
         except Exception as e:
-            self._log.log("DL_YM", f"EXCEPTION: {e}")
             return {"error": str(e)[:80]}
         finally:
             if os.path.exists(ddir):
@@ -1834,22 +1841,19 @@ class MusicX(loader.Module):
                         inline_query_id=query.id, results=inline_results,
                         cache_time=0, is_personal=True,
                     )
-                except Exception as e:
-                    self._log.log("INLINE", f"answer error: {e}")
+                except Exception:
+                    pass
             else:
                 await self._inline_hint(query)
             return
-        self._log.log("SEARCH", f"Query: '{text}' limit={limit} vk={has_vk} ym={has_ym}")
         ym_coro = self._ym.search_track(text, count=limit) if has_ym else asyncio.sleep(0, result=[])
         vk_coro = self._vk.search_audio(text, count=limit) if has_vk else asyncio.sleep(0, result=[])
         ym_raw, vk_raw = await asyncio.gather(ym_coro, vk_coro, return_exceptions=True)
         ym_tracks = ym_raw if isinstance(ym_raw, list) else []
         vk_tracks = vk_raw if isinstance(vk_raw, list) else []
         if not ym_tracks and not vk_tracks:
-            self._log.log("SEARCH", f"No results for: {text}")
             await self._inline_msg(query, "Not found", f"No results for: {text}")
             return
-        self._log.log("SEARCH", f"Found YM={len(ym_tracks)} VK={len(vk_tracks)}")
         for t in vk_tracks:
             t["tid"] = f"vk_{t['owner_id']}_{t['id']}"
         await self._start_search_downloads(cache_key, ym_tracks, vk_tracks, query.from_user.id)
@@ -1861,8 +1865,8 @@ class MusicX(loader.Module):
                 inline_query_id=query.id, results=inline_results,
                 cache_time=0, is_personal=True,
             )
-        except Exception as e:
-            self._log.log("INLINE", f"answer error: {e}")
+        except Exception:
+            pass
 
     async def _inline_hint(self, query):
         try:
