@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-__version__ = (2, 1, 0)
+__version__ = (2, 1, 1)
 # meta developer: FireJester.t.me
 
 import os
@@ -905,14 +905,14 @@ class MusicX(loader.Module):
 
     strings = {
         "name": "MusicX",
-        "line": "--------------------",
+        "line": "-----------------------",
         "help": (
             "<b>MusicX - Audio Downloader & Search</b>\n"
             "{line}\n\n"
             "<b>Download by link:</b>\n"
-            "<code>@{bot} LINK</code>\n\n"
+            "<code>@{bot} MusicX LINK</code>\n\n"
             "<b>Search by name:</b>\n"
-            "<code>@{bot} song name</code>\n\n"
+            "<code>@{bot} MusicX song name</code>\n\n"
             "<b>Supported:</b>\n"
             "VK Audio | Yandex Music | YouTube\n\n"
             "<b>Commands:</b>\n"
@@ -1065,9 +1065,11 @@ class MusicX(loader.Module):
             return f"yt_{vid}" if vid else None
         return None
 
-    @loader.command()
+    @loader.command(
+        ru_doc="- show instruction for use",
+        en_doc="- show instruction for use"
+    )
     async def musicx(self, message: Message):
-        """MusicX command center"""
         args = utils.get_args_raw(message)
         args_list = args.split() if args else []
         if not args_list:
@@ -1697,7 +1699,10 @@ class MusicX(loader.Module):
                 inline_results.append(InlineQueryResultArticle(**kwargs))
         return inline_results
 
-    @loader.inline_handler(ru_doc="VK / Yandex Music / YouTube")
+    @loader.inline_handler(
+        ru_doc="VK / Yandex Music / YouTube",
+        en_doc="VK / Yandex Music / YouTube"
+    )
     async def musicx_inline_handler(self, query: InlineQuery):
         raw = query.query.strip()
         prefix = "musicx"
