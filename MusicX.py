@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-__version__ = (2, 1, 1)
+__version__ = (2, 2, 1)
 # meta developer: FireJester.t.me
 
 import os
@@ -120,6 +120,7 @@ VK_USER_AGENTS = {
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/120.0.0.0 Safari/537.36"
     ),
+    "facebook": "facebookexternalhit/1.1",
 }
 
 STUB_URLS = ["audio_api_unavailable.mp3", "audio_api_unavailable"]
@@ -251,14 +252,23 @@ def _detect_token_source(text):
     return None
 
 
-def normalize_cover(raw_data, max_size=None):
+def normalize_cover(raw_data, max_size=None, force_jpeg=False):
     if not raw_data or len(raw_data) < 100:
         return None
     try:
-        is_png = raw_data[:8] == b'\x89PNG\r\n\x1a\n'
         img = Image.open(io.BytesIO(raw_data))
         w, h = img.size
         needs_resize = max_size is not None and (w > max_size or h > max_size)
+        if force_jpeg:
+            img = img.convert("RGB")
+            if needs_resize:
+                ratio = min(max_size / w, max_size / h)
+                img = img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=95)
+            result = buf.getvalue()
+            return result if len(result) >= 100 else None
+        is_png = raw_data[:8] == b'\x89PNG\r\n\x1a\n'
         if is_png and not needs_resize:
             return raw_data
         img = img.convert("RGB")
@@ -289,13 +299,43 @@ class CoverFetcher:
             return None
 
     @staticmethod
-    async def fetch_vk_og_image(owner_id, audio_id):
+    async def fetch_vk_og_image(audio_id_str):
+        url = f"https://vk.com/audio{audio_id_str}"
+        try:
+            async with aiohttp.ClientSession() as s:
+                async with s.get(
+                    url,
+                    headers={
+                        "User-Agent": VK_USER_AGENTS["facebook"],
+                        "Accept-Language": "ru-RU,ru;q=0.9",
+                    },
+                    timeout=aiohttp.ClientTimeout(total=10),
+                    allow_redirects=True,
+                ) as r:
+                    if r.status != REQUEST_OK:
+                        return ""
+                    html = await r.text(errors="replace")
+            for pat in [OG_IMAGE_RE, OG_IMAGE_RE2]:
+                m = pat.search(html)
+                if m:
+                    u = m.group(1).replace("&amp;", "&")
+                    if u and "userapi.com" in u:
+                        return u
+        except Exception:
+            pass
+        return ""
+
+    @staticmethod
+    async def fetch_vk_og_image_legacy(owner_id, audio_id):
         url = f"https://vk.com/audio{owner_id}_{audio_id}"
         try:
             async with aiohttp.ClientSession() as s:
                 async with s.get(
                     url,
-                    headers={"User-Agent": VK_USER_AGENTS["chrome"], "Accept-Language": "ru-RU,ru;q=0.9"},
+                    headers={
+                        "User-Agent": VK_USER_AGENTS["facebook"],
+                        "Accept-Language": "ru-RU,ru;q=0.9",
+                    },
                     timeout=aiohttp.ClientTimeout(total=10),
                     allow_redirects=True,
                 ) as r:
@@ -316,14 +356,20 @@ class CoverFetcher:
     async def try_bigger_vk(url):
         if not url:
             return url
-        bigger = re.sub(r'size=\d+x\d+', 'size=1200x1200', url)
-        if bigger == url:
+        if not re.search(r'size=\d+x\d+', url):
             return url
         try:
             async with aiohttp.ClientSession() as s:
-                async with s.head(bigger, timeout=aiohttp.ClientTimeout(total=5)) as r:
-                    if r.status == REQUEST_OK:
-                        return bigger
+                for sz in [1200, 1000, 800, 600]:
+                    candidate = re.sub(r'size=\d+x\d+', f'size={sz}x{sz}', url)
+                    if candidate == url:
+                        return url
+                    try:
+                        async with s.head(candidate, timeout=aiohttp.ClientTimeout(total=5)) as r:
+                            if r.status == REQUEST_OK:
+                                return candidate
+                    except Exception:
+                        continue
         except Exception:
             pass
         return url
@@ -520,6 +566,18 @@ class VKAPIClient:
                 pass
         return []
 
+    async def get_release_audio_id(self, oid, aid):
+        try:
+            r = await self._api("audio.getById", app="kate", audios=f"{oid}_{aid}")
+            if r and isinstance(r, list) and r:
+                item = r[0]
+                release_id = item.get("release_audio_id")
+                if release_id:
+                    return release_id
+        except Exception:
+            pass
+        return None
+
     def _parse(self, a):
         if not a:
             return None
@@ -537,10 +595,12 @@ class VKAPIClient:
                     if th.get(k):
                         thumb = th[k]
                         break
+        release_audio_id = a.get("release_audio_id", "")
         return {
             "id": a.get("id"), "owner_id": a.get("owner_id"), "url": url,
             "artist": artist, "title": title,
             "duration": int(a.get("duration", 0) or 0), "thumbnail": thumb,
+            "release_audio_id": release_audio_id,
         }
 
 
@@ -1174,7 +1234,11 @@ class MusicX(loader.Module):
     async def _upload_to_tg(self, file_bytes, filename, title, artist, dur_s, thumb_data, user_id):
         async with self._upload_lock:
             audio_inp = BufferedInputFile(file_bytes, filename=filename)
-            thumb_inp = BufferedInputFile(thumb_data, filename="cover.png") if thumb_data else None
+            thumb_inp = None
+            if thumb_data:
+                is_jpeg = thumb_data[:3] == b'\xff\xd8\xff'
+                thumb_ext = "cover.jpg" if is_jpeg else "cover.png"
+                thumb_inp = BufferedInputFile(thumb_data, filename=thumb_ext)
             try:
                 sent = await self.inline_bot.send_audio(
                     chat_id=user_id, audio=audio_inp, title=title,
@@ -1196,6 +1260,39 @@ class MusicX(loader.Module):
                 return file_id
             return None
 
+    async def _resolve_vk_cover_by_release_id(self, track_info):
+        release_id = track_info.get("release_audio_id", "")
+        owner_id = track_info.get("owner_id")
+        audio_id = track_info.get("id")
+
+        if release_id:
+            og_url = await CoverFetcher.fetch_vk_og_image(release_id)
+            if og_url:
+                og_url = await CoverFetcher.try_bigger_vk(og_url)
+                raw = await CoverFetcher.download_image(og_url)
+                if raw:
+                    return og_url, raw
+
+        if not release_id and owner_id is not None and audio_id is not None:
+            release_id = await self._vk.get_release_audio_id(owner_id, audio_id)
+            if release_id:
+                og_url = await CoverFetcher.fetch_vk_og_image(release_id)
+                if og_url:
+                    og_url = await CoverFetcher.try_bigger_vk(og_url)
+                    raw = await CoverFetcher.download_image(og_url)
+                    if raw:
+                        return og_url, raw
+
+        if owner_id is not None and audio_id is not None:
+            og_url = await CoverFetcher.fetch_vk_og_image_legacy(owner_id, audio_id)
+            if og_url:
+                og_url = await CoverFetcher.try_bigger_vk(og_url)
+                raw = await CoverFetcher.download_image(og_url)
+                if raw:
+                    return og_url, raw
+
+        return "", None
+
     async def _vk_link_dl(self, owner, aid):
         ddir = tempfile.mkdtemp(dir=self._tmp)
         try:
@@ -1211,13 +1308,18 @@ class MusicX(loader.Module):
             title = info.get("title", "Unknown") or "Unknown"
             dur = int(info.get("duration", 0) or 0)
             thumb_url = info.get("thumbnail", "")
-            if not thumb_url:
-                thumb_url = await CoverFetcher.fetch_vk_og_image(owner, aid)
+
+            raw_cover = None
             if thumb_url:
                 thumb_url = await CoverFetcher.try_bigger_vk(thumb_url)
-            raw_cover = await CoverFetcher.download_image(thumb_url) if thumb_url else None
-            cover_data = normalize_cover(raw_cover) if raw_cover else None
-            thumb_data = normalize_cover(raw_cover, max_size=320) if raw_cover else None
+                raw_cover = await CoverFetcher.download_image(thumb_url)
+
+            if not raw_cover:
+                _, raw_cover = await self._resolve_vk_cover_by_release_id(info)
+
+            cover_data = normalize_cover(raw_cover, force_jpeg=True) if raw_cover else None
+            thumb_data = normalize_cover(raw_cover, max_size=320, force_jpeg=True) if raw_cover else None
+
             ext = "ts" if ".m3u8" in url else "mp3"
             raw = os.path.join(ddir, f"raw.{ext}")
             if not await self._vk_dl.dl(url, raw):
@@ -1244,7 +1346,7 @@ class MusicX(loader.Module):
             if os.path.getsize(mp3) > MAX_FILE_SIZE:
                 return {"error": "too_big", "dir": ddir}
             if cover_data and mp3.endswith(".mp3"):
-                cover_path = os.path.join(ddir, "cover.png")
+                cover_path = os.path.join(ddir, "cover.jpg")
                 with open(cover_path, "wb") as cf:
                     cf.write(cover_data)
                 covered_mp3 = os.path.join(ddir, f"{name}_cover.mp3")
@@ -1398,8 +1500,8 @@ class MusicX(loader.Module):
         dur = track_info["duration"]
         try:
             cover_url, raw_cover = await self._resolve_vk_cover(track_info)
-            cover_data = normalize_cover(raw_cover) if raw_cover else None
-            thumb_data = normalize_cover(raw_cover, max_size=320) if raw_cover else None
+            cover_data = normalize_cover(raw_cover, force_jpeg=True) if raw_cover else None
+            thumb_data = normalize_cover(raw_cover, max_size=320, force_jpeg=True) if raw_cover else None
             ext = "ts" if ".m3u8" in url else "mp3"
             raw = os.path.join(ddir, f"raw.{ext}")
             if not await self._vk_dl.dl(url, raw):
@@ -1428,7 +1530,7 @@ class MusicX(loader.Module):
             if os.path.getsize(final_mp3) > MAX_FILE_SIZE:
                 return {"error": "File > 50 MB"}
             if cover_data and final_mp3.endswith(".mp3"):
-                cover_path = os.path.join(ddir, "cover.png")
+                cover_path = os.path.join(ddir, "cover.jpg")
                 with open(cover_path, "wb") as cf:
                     cf.write(cover_data)
                 covered_mp3 = os.path.join(ddir, f"{clean_name}_cover.mp3")
@@ -1524,10 +1626,21 @@ class MusicX(loader.Module):
         thumb_url = track_info.get("thumbnail", "")
         if thumb_url:
             return thumb_url
+        release_id = track_info.get("release_audio_id", "")
         owner_id = track_info.get("owner_id")
         audio_id = track_info.get("id")
+        if release_id:
+            og_url = await CoverFetcher.fetch_vk_og_image(release_id)
+            if og_url:
+                return og_url
+        if not release_id and owner_id is not None and audio_id is not None:
+            release_id = await self._vk.get_release_audio_id(owner_id, audio_id)
+            if release_id:
+                og_url = await CoverFetcher.fetch_vk_og_image(release_id)
+                if og_url:
+                    return og_url
         if owner_id is not None and audio_id is not None:
-            og_url = await CoverFetcher.fetch_vk_og_image(owner_id, audio_id)
+            og_url = await CoverFetcher.fetch_vk_og_image_legacy(owner_id, audio_id)
             if og_url:
                 return og_url
         return None
@@ -1536,17 +1649,17 @@ class MusicX(loader.Module):
         thumb_url = track_info.get("thumbnail", "")
         owner_id = track_info.get("owner_id")
         audio_id = track_info.get("id")
+
         if thumb_url:
-            raw = await CoverFetcher.download_image(thumb_url)
+            thumb_url_big = await CoverFetcher.try_bigger_vk(thumb_url)
+            raw = await CoverFetcher.download_image(thumb_url_big)
             if raw:
-                return thumb_url, raw
-        if owner_id is not None and audio_id is not None:
-            og_url = await CoverFetcher.fetch_vk_og_image(owner_id, audio_id)
-            if og_url:
-                og_url = await CoverFetcher.try_bigger_vk(og_url)
-                raw = await CoverFetcher.download_image(og_url)
-                if raw:
-                    return og_url, raw
+                return thumb_url_big, raw
+
+        cover_url, raw_cover = await self._resolve_vk_cover_by_release_id(track_info)
+        if raw_cover:
+            return cover_url, raw_cover
+
         return "", None
 
     async def _resolve_all_vk_previews(self, tracks):
@@ -1670,7 +1783,7 @@ class MusicX(loader.Module):
             elif res and "error" in res:
                 kwargs = {
                     "id": f"err_{tid}_{int(time.time())}",
-                    "title": f"{artist} - {title} {tag}",
+                    "title": f"{tag} {artist} - {title}",
                     "description": f"Error: {res['error']}",
                     "input_message_content": InputTextMessageContent(
                         message_text=f"<b>MusicX:</b> Error: <b>{escape_html(artist)} - {escape_html(title)}</b>: {escape_html(res['error'])}",
@@ -1685,7 +1798,7 @@ class MusicX(loader.Module):
             else:
                 kwargs = {
                     "id": f"dl_{tid}_{int(time.time())}",
-                    "title": f"{artist} - {title} {tag}",
+                    "title": f"{tag} {artist} - {title}",
                     "description": "Downloading... Repeat the query in ~10 sec",
                     "input_message_content": InputTextMessageContent(
                         message_text=f"<b>MusicX:</b> Downloading <b>{escape_html(artist)} - {escape_html(title)}</b>...",
