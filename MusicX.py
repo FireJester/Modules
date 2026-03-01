@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-__version__ = (2, 2, 1)
+__version__ = (2, 2, 2)
 # meta developer: FireJester.t.me
 
 import os
@@ -1036,7 +1036,11 @@ class MusicX(loader.Module):
         self._db = db
         self._upload_lock = asyncio.Lock()
         self._data_lock = asyncio.Lock()
-        self._tmp = os.path.join(tempfile.gettempdir(), "musicx")
+
+        me = await client.get_me()
+        tg_user_id = me.id
+        self._tmp = os.path.join(tempfile.gettempdir(), f"MusicX_{tg_user_id}")
+
         if os.path.exists(self._tmp):
             shutil.rmtree(self._tmp, ignore_errors=True)
         os.makedirs(self._tmp, exist_ok=True)
