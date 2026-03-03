@@ -121,7 +121,7 @@ class Note(loader.Module):
 
         try:
             chat_entity, _ = await utils.asset_channel(
-                self._client, "Note Storage", "Notes storage. @FireJester with \u26a1",
+                self._client, "Note Storage", "Notes storage. @FireJester with ♡",
                 silent=True, avatar=STORAGE_AVATAR,
             )
         except Exception:
@@ -203,7 +203,6 @@ class Note(loader.Module):
         return stored_ids
 
     async def _is_forum_chat(self, message):
-        """Проверяем является ли чат форумом с топиками."""
         if message.is_private:
             return False
         try:
@@ -213,7 +212,6 @@ class Note(loader.Module):
             return False
 
     def _get_topic_id(self, message):
-        """Вытаскиваем ID топика из сообщения."""
         reply_to = getattr(message, 'reply_to', None)
         if reply_to:
             top_id = getattr(reply_to, 'reply_to_top_id', None)
