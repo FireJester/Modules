@@ -1,7 +1,10 @@
-__version__ = (2, 0, 0)
+__version__ = (2, 1, 0)
 # meta developer: FireJester.t.me 
 
-from telethon.tl.types import User, Channel, Message
+from telethon.tl.types import User, Channel, Message, InputPhotoFileLocation
+from telethon.tl.functions.photos import GetUserPhotosRequest
+from telethon.tl.functions.channels import GetFullChannelRequest
+from telethon.tl.functions.messages import GetFullChatRequest
 from .. import loader, utils
 import os
 import asyncio
@@ -9,6 +12,7 @@ import tempfile
 
 @loader.tds
 class Info(loader.Module):
+    """Gives information about user"""
     
     strings = {
         "name": "Info",
@@ -127,28 +131,93 @@ class Info(loader.Module):
         return False
 
     def _get_topic_id(self, message: Message):
-        reply_to = getattr(message, 'reply_to', None)
+        reply_to = getattr(message, "reply_to", None)
         if reply_to:
-            return getattr(reply_to, 'reply_to_top_id', None) or getattr(reply_to, 'reply_to_msg_id', None)
+            return getattr(reply_to, "reply_to_top_id", None) or getattr(
+                reply_to, "reply_to_msg_id", None
+            )
         return None
+
+    def _pick_best_video_size(self, video_sizes):
+        """Pick the best VideoSize, preferring type 'u' (full quality)."""
+        best = None
+        for vs in video_sizes:
+            if hasattr(vs, "type") and vs.type == "u":
+                return vs
+            if best is None:
+                best = vs
+        return best if best else video_sizes[-1]
+
+    async def _download_video_from_photo(self, client, photo_obj):
+        """Download video from a Photo object using InputPhotoFileLocation."""
+        video_sizes = getattr(photo_obj, "video_sizes", None)
+        if not video_sizes:
+            return None
+        best = self._pick_best_video_size(video_sizes)
+        location = InputPhotoFileLocation(
+            id=photo_obj.id,
+            access_hash=photo_obj.access_hash,
+            file_reference=photo_obj.file_reference,
+            thumb_size=best.type,
+        )
+        path = tempfile.mktemp(suffix=".mp4")
+        try:
+            await client.download_file(location, path)
+            if os.path.exists(path) and os.path.getsize(path) > 0:
+                return path
+            if os.path.exists(path):
+                os.remove(path)
+            return None
+        except Exception:
+            if os.path.exists(path):
+                try:
+                    os.remove(path)
+                except Exception:
+                    pass
+            return None
+
+    async def _get_user_profile_video(self, client, user):
+        """Download user's video avatar."""
+        try:
+            result = await client(
+                GetUserPhotosRequest(
+                    user_id=user, offset=0, max_id=0, limit=1
+                )
+            )
+            if not result.photos:
+                return None
+            return await self._download_video_from_photo(client, result.photos[0])
+        except Exception:
+            return None
+
+    async def _get_chat_profile_video(self, client, chat):
+        """Download chat's video avatar."""
+        try:
+            if isinstance(chat, Channel):
+                full = await client(GetFullChannelRequest(channel=chat))
+            else:
+                full = await client(GetFullChatRequest(chat_id=chat.id))
+            chat_photo = getattr(full.full_chat, "chat_photo", None)
+            if not chat_photo:
+                return None
+            return await self._download_video_from_photo(client, chat_photo)
+        except Exception:
+            return None
 
     async def _get_avatar(self, client, entity):
         try:
             is_video = self._has_video_avatar(entity)
             if is_video:
-                path = tempfile.mktemp(suffix=".mp4")
-                result = await client.download_profile_photo(
-                    entity,
-                    file=path,
-                    download_big=True
-                )
-                if result:
+                if isinstance(entity, User):
+                    path = await self._get_user_profile_video(client, entity)
+                else:
+                    path = await self._get_chat_profile_video(client, entity)
+                if path:
                     return path, True
                 return None, False
             else:
                 result = await client.download_profile_photo(
-                    entity,
-                    download_big=True
+                    entity, download_big=True
                 )
                 if result:
                     return result, False
@@ -160,11 +229,18 @@ class Info(loader.Module):
         output = tempfile.mktemp(suffix=".mp4")
         try:
             process = await asyncio.create_subprocess_exec(
-                "ffmpeg", "-y",
-                "-i", video_path,
-                "-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono",
-                "-c:v", "copy",
-                "-c:a", "aac",
+                "ffmpeg",
+                "-y",
+                "-i",
+                video_path,
+                "-f",
+                "lavfi",
+                "-i",
+                "anullsrc=r=44100:cl=mono",
+                "-c:v",
+                "copy",
+                "-c:a",
+                "aac",
                 "-shortest",
                 output,
                 stdout=asyncio.subprocess.DEVNULL,
@@ -210,7 +286,9 @@ class Info(loader.Module):
         if username and username.strip():
             username_text = f"<u>@{utils.escape_html(username)}</u>"
         else:
-            username_text = f'<a href="tg://user?id={user.id}">{display_name}</a>'
+            username_text = (
+                f'<a href="tg://user?id={user.id}">{display_name}</a>'
+            )
         dc = self._get_dc(user)
         prefix = "prem" if is_premium else "noprem"
         suffix = "_full" if dc else "_no_dc"
@@ -219,7 +297,7 @@ class Info(loader.Module):
             name=display_name,
             username=username_text,
             user_id=user.id,
-            dc=dc
+            dc=dc,
         )
 
     def _build_chat_info_text(self, chat, is_premium):
@@ -245,7 +323,7 @@ class Info(loader.Module):
             username=username_text,
             chat_id=chat.id,
             type=chat_type,
-            dc=dc
+            dc=dc,
         )
 
     async def _cleanup_file(self, path):
@@ -255,17 +333,37 @@ class Info(loader.Module):
             except Exception:
                 pass
 
-    async def _send_result(self, message: Message, text, file=None, reply_to_msg_id=None):
+    async def _send_result(
+        self, message: Message, text, file=None, reply_to_msg_id=None, is_video=False
+    ):
         topic_id = self._get_topic_id(message)
         reply_to = reply_to_msg_id or topic_id
         await message.delete()
-        await message.client.send_message(
-            message.chat_id,
-            text,
-            file=file,
-            reply_to=reply_to,
-            parse_mode="HTML"
-        )
+        if file and is_video:
+            await message.client.send_file(
+                message.chat_id,
+                file,
+                caption=text,
+                reply_to=reply_to,
+                parse_mode="HTML",
+                supports_streaming=True,
+                attributes=[],
+            )
+        elif file:
+            await message.client.send_message(
+                message.chat_id,
+                text,
+                file=file,
+                reply_to=reply_to,
+                parse_mode="HTML",
+            )
+        else:
+            await message.client.send_message(
+                message.chat_id,
+                text,
+                reply_to=reply_to,
+                parse_mode="HTML",
+            )
 
     async def _send_error(self, message: Message, text):
         topic_id = self._get_topic_id(message)
@@ -274,12 +372,12 @@ class Info(loader.Module):
             message.chat_id,
             text,
             reply_to=topic_id,
-            parse_mode="HTML"
+            parse_mode="HTML",
         )
 
     @loader.command(
         ru_doc="Получить информацию о пользователе (добавь + для аватарки). Использование: реплай или @username",
-        en_doc="Get user information (add + for avatar). Usage: reply or @username"
+        en_doc="Get user information (add + for avatar). Usage: reply or @username",
     )
     async def who(self, message: Message):
         args = utils.get_args_raw(message) or ""
@@ -291,7 +389,9 @@ class Info(loader.Module):
             username = clean_args
         user = await self._get_target_user(message, username)
         if not user:
-            await self._send_error(message, self._get_error_string("error_reply", is_premium))
+            await self._send_error(
+                message, self._get_error_string("error_reply", is_premium)
+            )
             return
         text = self._build_user_info_text(user, is_premium)
         reply_to_msg_id = None
@@ -302,20 +402,30 @@ class Info(loader.Module):
         if with_photo:
             avatar, is_video = await self._get_avatar(message.client, user)
             if not avatar:
-                await self._send_error(message, self._get_error_string("no_photo_msg", is_premium))
+                await self._send_error(
+                    message, self._get_error_string("no_photo_msg", is_premium)
+                )
                 return
             try:
                 if is_video:
                     avatar = await self._add_silent_audio_async(avatar)
-                await self._send_result(message, text, file=avatar, reply_to_msg_id=reply_to_msg_id)
+                await self._send_result(
+                    message,
+                    text,
+                    file=avatar,
+                    reply_to_msg_id=reply_to_msg_id,
+                    is_video=is_video,
+                )
             finally:
                 await self._cleanup_file(avatar)
         else:
-            await self._send_result(message, text, reply_to_msg_id=reply_to_msg_id)
+            await self._send_result(
+                message, text, reply_to_msg_id=reply_to_msg_id
+            )
 
     @loader.command(
         ru_doc="Получить информацию о группе/канале (+ для аватарки)",
-        en_doc="Get group/channel information (+ for avatar)"
+        en_doc="Get group/channel information (+ for avatar)",
     )
     async def where(self, message: Message):
         args = utils.get_args_raw(message) or ""
@@ -323,18 +433,24 @@ class Info(loader.Module):
         is_premium = await self._check_premium(message.client)
         chat = await message.get_chat()
         if isinstance(chat, User):
-            await self._send_error(message, self._get_error_string("not_a_chat", is_premium))
+            await self._send_error(
+                message, self._get_error_string("not_a_chat", is_premium)
+            )
             return
         text = self._build_chat_info_text(chat, is_premium)
         if with_photo:
             avatar, is_video = await self._get_avatar(message.client, chat)
             if not avatar:
-                await self._send_error(message, self._get_error_string("no_chat_photo", is_premium))
+                await self._send_error(
+                    message, self._get_error_string("no_chat_photo", is_premium)
+                )
                 return
             try:
                 if is_video:
                     avatar = await self._add_silent_audio_async(avatar)
-                await self._send_result(message, text, file=avatar)
+                await self._send_result(
+                    message, text, file=avatar, is_video=is_video
+                )
             finally:
                 await self._cleanup_file(avatar)
         else:
