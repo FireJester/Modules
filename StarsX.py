@@ -1,4 +1,4 @@
-__version__ = (1, 3, 0)
+__version__ = (1, 3, 1)
 # meta developer: FireJester.t.me
 
 import os
@@ -2073,7 +2073,10 @@ class StarsX(loader.Module):
         except Exception as e:
             await utils.answer(message, self.strings["link_error"].format(error=str(e)[:200]))
 
-    @loader.inline_handler(ru_doc="stars [amount] - create invoice")
+    @loader.inline_handler(
+        ru_doc="[amount] - create invoice",
+        en_doc="[amount] - create invoice"
+    )
     async def stars_inline_handler(self, query: InlineQuery):
         m = re.match(r'^stars\s*(\d+)$', query.query.strip().lower())
         if not m:
