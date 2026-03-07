@@ -1,4 +1,4 @@
-__version__ = (3, 5, 0)
+__version__ = (3, 5, 1)
 # meta developer: FireJester.t.me
 
 import os
@@ -717,80 +717,17 @@ class XRay(loader.Module):
             self._traffic_task.cancel()
         self._traffic_task = asyncio.ensure_future(monitor())
 
+    def _extract_ip_from_ss_peer(self, peer):
+        m = re.match(r"\[::ffff:(\d+\.\d+\.\d+\.\d+)\]:\d+", peer)
+        if m:
+            return m.group(1)
+        m = re.match(r"(\d+\.\d+\.\d+\.\d+):\d+", peer)
+        if m:
+            return m.group(1)
+        return None
+
     def _get_active_clients(self):
-        if not self._proxy_running() or not self._proc:
-            return 0
-        pid = self._proc.pid
         port = self._db.get("XR", "port", 8443)
-
-        try:
-            fd_dir = f"/proc/{pid}/fd"
-            if not os.path.exists(fd_dir):
-                return 0
-
-            socket_inodes = set()
-            try:
-                for fd_name in os.listdir(fd_dir):
-                    try:
-                        link = os.readlink(os.path.join(fd_dir, fd_name))
-                        if link.startswith("socket:["):
-                            inode = link[8:-1]
-                            socket_inodes.add(inode)
-                    except (OSError, ValueError):
-                        continue
-            except PermissionError:
-                return self._get_active_clients_fallback(port)
-
-            if not socket_inodes:
-                return 0
-
-            unique_ips = set()
-            hex_port = format(port, "04X")
-
-            tcp_paths = [f"/proc/{pid}/net/tcp", "/proc/net/tcp"]
-            for tcp_path in tcp_paths:
-                if not os.path.exists(tcp_path):
-                    continue
-                try:
-                    with open(tcp_path, "r") as f:
-                        for line in f:
-                            parts = line.strip().split()
-                            if len(parts) < 10:
-                                continue
-                            if parts[0] == "sl":
-                                continue
-                            state = parts[3]
-                            if state != "01":
-                                continue
-                            local = parts[1]
-                            remote = parts[2]
-                            inode = parts[9]
-                            local_port_hex = local.split(":")[1]
-                            if local_port_hex.upper() != hex_port:
-                                continue
-                            if inode not in socket_inodes:
-                                continue
-                            remote_ip_hex = remote.split(":")[0]
-                            try:
-                                ip_int = int(remote_ip_hex, 16)
-                                ip_bytes = ip_int.to_bytes(4, "little")
-                                ip_str = ".".join(str(b) for b in ip_bytes)
-                                addr = ipaddress.IPv4Address(ip_str)
-                                if not addr.is_loopback and not addr.is_private:
-                                    unique_ips.add(ip_str)
-                            except (ValueError, OverflowError):
-                                continue
-                    if unique_ips:
-                        break
-                except (PermissionError, OSError):
-                    continue
-
-            return len(unique_ips)
-
-        except Exception:
-            return 0
-
-    def _get_active_clients_fallback(self, port):
         unique_ips = set()
         try:
             p = subprocess.run(
@@ -806,9 +743,8 @@ class XRay(loader.Module):
                     parts = line.split()
                     if len(parts) >= 5:
                         peer = parts[4]
-                        ip_match = re.match(r"(\d+\.\d+\.\d+\.\d+)", peer)
-                        if ip_match:
-                            ip_str = ip_match.group(1)
+                        ip_str = self._extract_ip_from_ss_peer(peer)
+                        if ip_str:
                             try:
                                 addr = ipaddress.IPv4Address(ip_str)
                                 if not addr.is_loopback and not addr.is_private:
