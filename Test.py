@@ -1,4 +1,4 @@
-__version__ = (1, 2, 0)
+__version__ = (1, 3, 0)
 # meta developer: FireJester.t.me
 
 import os
@@ -66,7 +66,10 @@ class Test(loader.Module):
         "ping_progress": "<b>Pinging services...</b>",
         "ping_result": (
             "<b>Ping Results</b>\n\n"
-            "<blockquote>{results}</blockquote>"
+            "<b>Services:</b>\n"
+            "<blockquote>{services}</blockquote>\n\n"
+            "<b>Telegram DC:</b>\n"
+            "<blockquote>{telegram}</blockquote>"
         ),
         "ping_fail": "<b>Ping failed</b>\n\n<code>{error}</code>",
 
@@ -285,79 +288,71 @@ class Test(loader.Module):
 
         return results
 
-    async def _run_latency_test(self):
-        targets = [
-            ("Cloudflare", "1.1.1.1"),
-            ("Google", "8.8.8.8"),
-            ("Telegram DC1", "149.154.175.53"),
-            ("Telegram DC2", "149.154.167.51"),
-            ("Telegram DC3", "149.154.175.100"),
-            ("Telegram DC4", "149.154.167.91"),
-            ("Telegram DC5", "91.108.56.130"),
-            ("Quad9", "9.9.9.9"),
-            ("OpenDNS", "208.67.222.222"),
-        ]
-        results = []
+    async def _ping_host(self, host, count=4):
+        try:
+            p = await asyncio.create_subprocess_exec(
+                "ping", "-c", str(count), "-W", "3", host,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            out, _ = await asyncio.wait_for(p.communicate(), timeout=20)
 
-        for name, host in targets:
-            try:
-                p = await asyncio.create_subprocess_exec(
-                    "ping", "-c", "4", "-W", "3", host,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
+            if p.returncode == 0 and out:
+                text = out.decode()
+                rtt = re.search(
+                    r"min/avg/max.*?=\s*([\d.]+)/([\d.]+)/([\d.]+)", text
                 )
-                out, _ = await asyncio.wait_for(p.communicate(), timeout=20)
+                loss = re.search(r"(\d+)% packet loss", text)
+                loss_val = int(loss.group(1)) if loss else 0
 
-                if p.returncode == 0 and out:
-                    text = out.decode()
-                    rtt = re.search(
-                        r"min/avg/max.*?=\s*([\d.]+)/([\d.]+)/([\d.]+)", text
-                    )
-                    loss = re.search(r"(\d+)% packet loss", text)
-                    loss_val = int(loss.group(1)) if loss else 0
+                if rtt:
+                    return {
+                        "min": float(rtt.group(1)),
+                        "avg": float(rtt.group(2)),
+                        "max": float(rtt.group(3)),
+                        "loss": loss_val,
+                    }
+                return {"min": -1, "avg": -1, "max": -1, "loss": loss_val}
 
-                    if rtt:
-                        results.append({
-                            "name": name, "host": host,
-                            "min": float(rtt.group(1)),
-                            "avg": float(rtt.group(2)),
-                            "max": float(rtt.group(3)),
-                            "loss": loss_val,
-                        })
-                    else:
-                        results.append({
-                            "name": name, "host": host,
-                            "min": -1, "avg": -1, "max": -1,
-                            "loss": loss_val,
-                        })
-                else:
-                    results.append({
-                        "name": name, "host": host,
-                        "min": -1, "avg": -1, "max": -1,
-                        "loss": 100,
-                    })
+            return {"min": -1, "avg": -1, "max": -1, "loss": 100}
 
-            except FileNotFoundError:
-                results.append({
-                    "name": name, "host": host,
-                    "min": -1, "avg": -1, "max": -1,
-                    "loss": -1, "error": "ping not found",
-                })
-                break
-            except asyncio.TimeoutError:
-                results.append({
-                    "name": name, "host": host,
-                    "min": -1, "avg": -1, "max": -1,
-                    "loss": 100, "error": "timeout",
-                })
-            except Exception as e:
-                results.append({
-                    "name": name, "host": host,
-                    "min": -1, "avg": -1, "max": -1,
-                    "loss": -1, "error": str(e),
-                })
+        except FileNotFoundError:
+            return {"min": -1, "avg": -1, "max": -1, "loss": -1, "error": "ping not found"}
+        except asyncio.TimeoutError:
+            return {"min": -1, "avg": -1, "max": -1, "loss": 100, "error": "timeout"}
+        except Exception as e:
+            return {"min": -1, "avg": -1, "max": -1, "loss": -1, "error": str(e)}
 
-        return results
+    def _format_ping_line(self, name, host, data):
+        if data.get("error"):
+            return (
+                f"[FAIL] <b>{name}</b> ({host}): "
+                f"<code>{_escape(data['error'])}</code>"
+            )
+        if data["avg"] < 0:
+            return (
+                f"[FAIL] <b>{name}</b> ({host}): "
+                f"<code>{data['loss']}% loss</code>"
+            )
+
+        avg = data["avg"]
+        if avg < 50:
+            tag = "[OK]"
+        elif avg < 150:
+            tag = "[SLOW]"
+        else:
+            tag = "[BAD]"
+
+        loss_str = ""
+        if data["loss"] > 0:
+            loss_str = f" | {data['loss']}% loss"
+
+        return (
+            f"{tag} <b>{name}</b> ({host})\n"
+            f"   avg: <code>{avg:.1f}ms</code>"
+            f" (min {data['min']:.1f} / max {data['max']:.1f})"
+            f"{loss_str}"
+        )
 
     async def _run_quick_latency(self):
         targets = [
@@ -367,35 +362,10 @@ class Test(loader.Module):
         ]
         results = []
         for name, host in targets:
-            try:
-                p = await asyncio.create_subprocess_exec(
-                    "ping", "-c", "3", "-W", "3", host,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-                out, _ = await asyncio.wait_for(p.communicate(), timeout=15)
-                if p.returncode == 0 and out:
-                    text = out.decode()
-                    rtt = re.search(
-                        r"min/avg/max.*?=\s*([\d.]+)/([\d.]+)/([\d.]+)", text
-                    )
-                    loss = re.search(r"(\d+)% packet loss", text)
-                    if rtt:
-                        results.append({
-                            "name": name, "host": host,
-                            "min": float(rtt.group(1)),
-                            "avg": float(rtt.group(2)),
-                            "max": float(rtt.group(3)),
-                            "loss": int(loss.group(1)) if loss else 0,
-                        })
-                    else:
-                        results.append({
-                            "name": name, "host": host,
-                            "min": -1, "avg": -1, "max": -1,
-                            "loss": int(loss.group(1)) if loss else 100,
-                        })
-            except Exception:
-                continue
+            data = await self._ping_host(host, count=3)
+            data["name"] = name
+            data["host"] = host
+            results.append(data)
         return results
 
     async def _run_dns_test(self):
@@ -638,22 +608,9 @@ class Test(loader.Module):
             if quick_targets:
                 lat_lines = []
                 for r in quick_targets:
-                    if r.get("error"):
-                        lat_lines.append(
-                            f"{r['name']} ({r['host']}): "
-                            f"<code>{_escape(r['error'])}</code>"
-                        )
-                    elif r["avg"] >= 0:
-                        lat_lines.append(
-                            f"{r['name']} ({r['host']}): "
-                            f"<code>{r['avg']:.1f}ms</code>"
-                            f" (min {r['min']:.1f} / max {r['max']:.1f})"
-                        )
-                    else:
-                        lat_lines.append(
-                            f"{r['name']} ({r['host']}): "
-                            f"<code>{r['loss']}% loss</code>"
-                        )
+                    lat_lines.append(
+                        self._format_ping_line(r["name"], r["host"], r)
+                    )
                 lat_text = "\n".join(lat_lines)
             else:
                 lat_text = "n/a"
@@ -720,51 +677,37 @@ class Test(loader.Module):
         m = await utils.answer(message, self.strings["ping_progress"])
 
         try:
-            results = await self._run_latency_test()
+            services = [
+                ("Cloudflare", "1.1.1.1"),
+                ("Google", "8.8.8.8"),
+                ("Quad9", "9.9.9.9"),
+                ("OpenDNS", "208.67.222.222"),
+            ]
 
-            if not results:
-                await self._safe_edit(
-                    m,
-                    self.strings["ping_fail"].format(error="No results"),
-                )
-                return
+            telegram_dcs = [
+                ("DC1", "149.154.175.53"),
+                ("DC2", "149.154.167.51"),
+                ("DC3", "149.154.175.100"),
+                ("DC4", "149.154.167.91"),
+                ("DC5", "91.108.56.130"),
+            ]
 
-            lines = []
-            for r in results:
-                if r.get("error"):
-                    line = (
-                        f"[FAIL] <b>{r['name']}</b> ({r['host']}): "
-                        f"<code>{_escape(r['error'])}</code>"
-                    )
-                elif r["avg"] < 0:
-                    line = (
-                        f"[FAIL] <b>{r['name']}</b> ({r['host']}): "
-                        f"<code>{r['loss']}% loss</code>"
-                    )
-                else:
-                    avg = r["avg"]
-                    if avg < 50:
-                        tag = "[OK]"
-                    elif avg < 150:
-                        tag = "[SLOW]"
-                    else:
-                        tag = "[BAD]"
+            svc_lines = []
+            for name, host in services:
+                data = await self._ping_host(host)
+                svc_lines.append(self._format_ping_line(name, host, data))
 
-                    loss_str = ""
-                    if r["loss"] > 0:
-                        loss_str = f" | {r['loss']}% loss"
-
-                    line = (
-                        f"{tag} <b>{r['name']}</b> ({r['host']})\n"
-                        f"   avg: <code>{avg:.1f}ms</code>"
-                        f" (min {r['min']:.1f} / max {r['max']:.1f})"
-                        f"{loss_str}"
-                    )
-                lines.append(line)
+            tg_lines = []
+            for name, host in telegram_dcs:
+                data = await self._ping_host(host)
+                tg_lines.append(self._format_ping_line(name, host, data))
 
             await self._safe_edit(
                 m,
-                self.strings["ping_result"].format(results="\n".join(lines)),
+                self.strings["ping_result"].format(
+                    services="\n".join(svc_lines),
+                    telegram="\n".join(tg_lines),
+                ),
             )
 
         except Exception as e:
