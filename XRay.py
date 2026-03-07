@@ -1,4 +1,4 @@
-__version__ = (3, 5, 1)
+__version__ = (3, 5, 2)
 # meta developer: FireJester.t.me
 
 import os
@@ -724,6 +724,9 @@ class XRay(loader.Module):
         m = re.match(r"(\d+\.\d+\.\d+\.\d+):\d+", peer)
         if m:
             return m.group(1)
+        m = re.match(r"\[([0-9a-fA-F:]+)\]:\d+", peer)
+        if m:
+            return None
         return None
 
     def _get_active_clients(self):
@@ -741,8 +744,8 @@ class XRay(loader.Module):
                     if not line:
                         continue
                     parts = line.split()
-                    if len(parts) >= 5:
-                        peer = parts[4]
+                    if len(parts) >= 4:
+                        peer = parts[3]
                         ip_str = self._extract_ip_from_ss_peer(peer)
                         if ip_str:
                             try:
