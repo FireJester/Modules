@@ -1,4 +1,4 @@
-__version__ = (2, 2, 4)
+__version__ = (2, 2, 5)
 # meta developer: FireJester.t.me
 
 import logging
@@ -23,11 +23,11 @@ class Note(loader.Module):
     strings_en = {
         "help": (
             "<b>Note module commands</b>\n\n"
-            "<code>.note create [name]</code> - save replied media\n"
-            "<code>.note add [name]</code> - add media to existing note\n"
-            "<code>.note remove [name]</code> - delete note\n"
-            "<code>.note list</code> - list all notes\n"
-            "<code>.note [name]</code> - post note"
+            "<code>{prefix}note create [name]</code> - save replied media\n"
+            "<code>{prefix}note add [name]</code> - add media to existing note\n"
+            "<code>{prefix}note remove [name]</code> - delete note\n"
+            "<code>{prefix}note list</code> - list all notes\n"
+            "<code>{prefix}note [name]</code> - post note"
         ),
         "created": "<b>Note</b> <code>{name}</code> <b>saved!</b>",
         "created_prem": "<emoji document_id=5265214770537075100>\U0001f920</emoji><emoji document_id=5265253528321954044>\U0001f920</emoji> <b>Note</b> <code>{name}</code> <b>saved!</b>",
@@ -56,11 +56,11 @@ class Note(loader.Module):
     strings_ru = {
         "help": (
             "<b>Команды модуля Note</b>\n\n"
-            "<code>.note create [название]</code> - сохранить медиа из реплая\n"
-            "<code>.note add [название]</code> - добавить медиа к существующей заметке\n"
-            "<code>.note remove [название]</code> - удалить заметку\n"
-            "<code>.note list</code> - список всех заметок\n"
-            "<code>.note [название]</code> - отправить заметку"
+            "<code>{prefix}note create [название]</code> - сохранить медиа из реплая\n"
+            "<code>{prefix}note add [название]</code> - добавить медиа к существующей заметке\n"
+            "<code>{prefix}note remove [название]</code> - удалить заметку\n"
+            "<code>{prefix}note list</code> - список всех заметок\n"
+            "<code>{prefix}note [название]</code> - отправить заметку"
         ),
         "created": "<b>Заметка</b> <code>{name}</code> <b>сохранена!</b>",
         "created_prem": "<emoji document_id=5265214770537075100>\U0001f920</emoji><emoji document_id=5265253528321954044>\U0001f920</emoji> <b>Заметка</b> <code>{name}</code> <b>сохранена!</b>",
@@ -94,6 +94,9 @@ class Note(loader.Module):
         self._storage_chat_entity = None
         self._premium = None
 
+    def _get_prefix(self):
+        return self.get_prefix() if hasattr(self, "get_prefix") else "."
+
     async def _get_premium_status(self):
         if self._premium is None:
             me = await self._client.get_me()
@@ -106,6 +109,9 @@ class Note(loader.Module):
             if not prem_res.startswith("Unknown string"):
                 return prem_res
         return self.strings(key)
+
+    def _render_help(self):
+        return self._get_str("help").format(prefix=self._get_prefix())
 
     async def _ensure_storage(self):
         chat_id = self.config["STORAGE_CHAT_ID"]
@@ -234,7 +240,7 @@ class Note(loader.Module):
 
         parts = args.split(maxsplit=1)
         if not parts:
-            await utils.answer(message, self._get_str("help"))
+            await utils.answer(message, self._render_help())
             return
 
         cmd = parts[0].lower()
