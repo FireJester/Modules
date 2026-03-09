@@ -1,4 +1,4 @@
-__version__ = (1, 3, 0)
+__version__ = (1, 4, 0)
 # meta developer: FireJester.t.me
 
 import os
@@ -26,7 +26,9 @@ class Test(loader.Module):
 
     strings = {
         "name": "Test",
+    }
 
+    strings_en = {
         "help": (
             "<b>Test - Network Monitor</b>\n\n"
             "<b>Commands:</b>\n"
@@ -41,9 +43,9 @@ class Test(loader.Module):
         "speed_result": (
             "<b>Speed Test Results</b>\n"
             "<b>Download:</b>\n"
-            "<blockquote>{download}</blockquote>\n\n"
+            "<blockquote>{download}</blockquote>\n"
             "<b>Upload:</b>\n"
-            "<blockquote>{upload}</blockquote>\n\n"
+            "<blockquote>{upload}</blockquote>\n"
             "<b>Latency:</b>\n"
             "<blockquote>{latency}</blockquote>"
         ),
@@ -67,7 +69,7 @@ class Test(loader.Module):
         "ping_result": (
             "<b>Ping Results</b>\n"
             "<b>Services:</b>\n"
-            "<blockquote>{services}</blockquote>\n\n"
+            "<blockquote>{services}</blockquote>\n"
             "<b>Telegram DC:</b>\n"
             "<blockquote>{telegram}</blockquote>"
         ),
@@ -95,6 +97,77 @@ class Test(loader.Module):
             "</blockquote>"
         ),
         "ip_fail": "<b>Failed to get IP info</b>\n<code>{error}</code>",
+    }
+
+    strings_ru = {
+        "help": (
+            "<b>Test - Сетевой монитор</b>\n\n"
+            "<b>Команды:</b>\n"
+            "<code>{prefix}test speed</code> - тест скорости интернета (Cloudflare)\n"
+            "<code>{prefix}test net</code> - статистика использования сети\n"
+            "<code>{prefix}test ping</code> - пинг до популярных сервисов\n"
+            "<code>{prefix}test dns</code> - тест скорости DNS резолва\n"
+            "<code>{prefix}test ip</code> - внешний IP, гео, ASN\n"
+        ),
+
+        "speed_progress": "<b>Запуск теста скорости...</b>",
+        "speed_result": (
+            "<b>Результаты теста скорости</b>\n"
+            "<b>Скачивание:</b>\n"
+            "<blockquote>{download}</blockquote>\n"
+            "<b>Загрузка:</b>\n"
+            "<blockquote>{upload}</blockquote>\n"
+            "<b>Задержка:</b>\n"
+            "<blockquote>{latency}</blockquote>"
+        ),
+        "speed_fail": "<b>Тест скорости провалился</b>\n<code>{error}</code>",
+
+        "net_stats": (
+            "<b>Сетевая статистика</b>\n\n"
+            "<b>Интерфейсы:</b>\n"
+            "<blockquote>{interfaces}</blockquote>\n"
+            "<b>Итого (без loopback):</b>\n"
+            "<blockquote>"
+            "RX: <code>{total_rx}</code>\n"
+            "TX: <code>{total_tx}</code>\n"
+            "Всего: <code>{total}</code>"
+            "</blockquote>\n"
+            "<b>Аптайм системы:</b> <code>{uptime}</code>"
+        ),
+        "net_fail": "<b>Не удалось прочитать сетевую статистику</b>\n<code>{error}</code>",
+
+        "ping_progress": "<b>Пингуем сервисы...</b>",
+        "ping_result": (
+            "<b>Результаты пинга</b>\n"
+            "<b>Сервисы:</b>\n"
+            "<blockquote>{services}</blockquote>\n"
+            "<b>Telegram DC:</b>\n"
+            "<blockquote>{telegram}</blockquote>"
+        ),
+        "ping_fail": "<b>Пинг провалился</b>\n<code>{error}</code>",
+
+        "dns_progress": "<b>Тестируем скорость DNS резолва...</b>",
+        "dns_result": (
+            "<b>Тест DNS резолва</b>\n"
+            "<blockquote>{results}</blockquote>"
+        ),
+        "dns_fail": "<b>Тест DNS провалился</b>\n<code>{error}</code>",
+
+        "ip_progress": "<b>Получаем информацию об IP...</b>",
+        "ip_result": (
+            "<b>Информация об IP</b>\n"
+            "<blockquote>"
+            "IP: <code>{ip}</code>\n"
+            "Страна: <code>{country}</code>\n"
+            "Регион: <code>{region}</code>\n"
+            "Город: <code>{city}</code>\n"
+            "Провайдер: <code>{isp}</code>\n"
+            "AS: <code>{as_info}</code>\n"
+            "Орг: <code>{org}</code>\n"
+            "Часовой пояс: <code>{timezone}</code>"
+            "</blockquote>"
+        ),
+        "ip_fail": "<b>Не удалось получить информацию об IP</b>\n<code>{error}</code>",
     }
 
     def _format_bytes(self, b):
