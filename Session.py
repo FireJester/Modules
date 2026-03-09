@@ -1,4 +1,4 @@
-__version__ = (1, 0, 0)
+__version__ = (2, 0, 0)
 # meta developer: FireJester.t.me
 
 import logging
@@ -34,98 +34,108 @@ HEX_KEY_PATTERN = re.compile(r'[0-9a-fA-F]{512}')
 
 @loader.tds
 class Session(loader.Module):
+    """Session manager for Telegram"""
+
     strings = {
         "name": "Session",
+    }
+
+    strings_en = {
         "line": "--------------------",
         "usage": (
-            "<b>Session Manager v3.1.5</b>\n\n"
+            "<b>Session Manager</b>\n\n"
             "<b>Create:</b>\n"
-            "<code>.session create string</code>\n"
-            "<code>.session create file</code>\n"
-            "<code>.session create hex</code>\n"
-            "<code>.session phone/code/password</code>\n\n"
+            "<code>{prefix}session create string</code>\n"
+            "<code>{prefix}session create file</code>\n"
+            "<code>{prefix}session create hex</code>\n"
+            "<code>{prefix}session phone/code/password</code>\n\n"
             "<b>Convert:</b>\n"
-            "<code>.session convert hex_to_string</code>\n"
-            "<code>.session convert hex_to_file</code>\n"
-            "<code>.session convert string_to_hex</code>\n"
-            "<code>.session convert string_to_file</code>\n"
-            "<code>.session convert file_to_string</code>\n"
-            "<code>.session convert file_to_hex</code>\n"
-            "<code>.session convert dc <id></code>\n\n"
-            "<b>Info/Test:</b>\n"
-            "<code>.session info</code> | <code>.session test</code>\n"
-            "<code>.session info dc <id></code> | <code>.session test dc <id></code>\n\n"
-            "<b>Config:</b>\n"
-            "<code>.session id/hash <val></code>\n"
-            "<code>.session terminate</code>\n"
+            "<code>{prefix}session convert hex_to_string</code>\n"
+            "<code>{prefix}session convert hex_to_file</code>\n"
+            "<code>{prefix}session convert string_to_hex</code>\n"
+            "<code>{prefix}session convert string_to_file</code>\n"
+            "<code>{prefix}session convert file_to_string</code>\n"
+            "<code>{prefix}session convert file_to_hex</code>\n"
+            "<code>{prefix}session convert dc [id]</code>\n\n"
+            "<b>Test:</b>\n"
+            "<code>{prefix}session test</code>\n"
+            "<code>{prefix}session test dc [id]</code>\n\n"
+            "<code>{prefix}session terminate</code>\n"
         ),
         "create_status": (
             "<b>{status_text}</b>\n"
             "{line}\n"
+            "<blockquote>"
             "Output: {output_type}\n"
             "API ID: {api_id_st}\n"
             "API HASH: {api_hash_st}\n"
             "Phone: {phone_st}\n"
             "Code: {code_st}\n"
-            "Password: {pass_st}\n"
-            "Result: {result_st}\n"
+            "Password: {pass_st}"
+            "</blockquote>\n"
+            "<b>Result:</b>\n"
+            "<blockquote>{result_st}</blockquote>\n"
             "{line}\n"
             "Execution time: {exec_time} sec"
         ),
         "convert_status": (
             "<b>{status_text}</b>\n"
             "{line}\n"
+            "<blockquote>"
             "Mode: {mode}\n"
             "Input: {input_st}\n"
-            "DC ID: {dc_st}\n"
-            "Result: {result_st}\n"
-            "{line}\n"
-            "Execution time: {exec_time} sec"
-        ),
-        "info_status": (
-            "<b>{status_text}</b>\n"
-            "{line}\n"
-            "Input: {input_st}\n"
-            "DC ID: {dc_st}\n"
+            "DC ID: {dc_st}"
+            "</blockquote>\n"
+            "<b>Result:</b>\n"
+            "<blockquote>{result_st}</blockquote>\n"
             "{line}\n"
             "Execution time: {exec_time} sec"
         ),
         "test_status": (
             "<b>{status_text}</b>\n"
             "{line}\n"
+            "<blockquote>"
             "Input: {input_st}\n"
             "DC ID: {dc_st}\n"
-            "Connection: {conn_st}\n"
+            "Connection: {conn_st}"
+            "</blockquote>\n"
             "{line}\n"
             "Execution time: {exec_time} sec"
-        ),
-        "info_result": (
-            "<b>Session Info</b>\n"
-            "{line}\n"
-            "DC ID: <code>{dc_id}</code>\n"
-            "Server IP: <code>{ip}</code>\n"
-            "Port: <code>{port}</code>\n"
-            "Auth Key: <code>{key_len} bytes</code>\n"
-            "{line}"
         ),
         "test_success": (
             "<b>Session Valid</b>\n"
             "{line}\n"
+            "<blockquote>"
             "User: {user_link}\n"
             "ID: <code>{user_id}</code>\n"
             "DC: <code>{dc_id}</code>\n"
+            "Server IP: <code>{ip}</code>\n"
+            "Port: <code>{port}</code>\n"
+            "Auth Key: <code>{key_len} bytes</code>\n"
             "Premium: {premium}\n"
-            "Status: <b>OK</b>\n"
+            "Status: <b>OK</b>"
+            "</blockquote>\n"
             "{line}"
         ),
         "test_fail": (
             "<b>Session Invalid</b>\n"
             "{line}\n"
-            "Reason: {reason}\n"
+            "<blockquote>Reason: {reason}</blockquote>\n"
+            "{line}"
+        ),
+        "test_info_only": (
+            "<b>Session Info</b> (not authorized)\n"
+            "{line}\n"
+            "<blockquote>"
+            "DC ID: <code>{dc_id}</code>\n"
+            "Server IP: <code>{ip}</code>\n"
+            "Port: <code>{port}</code>\n"
+            "Auth Key: <code>{key_len} bytes</code>"
+            "</blockquote>\n"
             "{line}"
         ),
         "file_caption": "<b>String → File</b>",
-        "err_running": "<b>Error:</b> Process running. Use <code>.session terminate</code>",
+        "err_running": "<b>Error:</b> Process running. Use <code>{prefix}session terminate</code>",
         "err_no_process": "<b>Error:</b> No active process.",
         "err_wrong_step": "<b>Error:</b> Wrong step. Current: <b>{step}</b>",
         "err_no_file": "<b>Error:</b> Reply to .session file.",
@@ -139,7 +149,6 @@ class Session(loader.Module):
         "creating": "Creating new session...",
         "converting": "Converting session...",
         "checking": "Checking session...",
-        "getting_info": "Getting info...",
         "wait": "wait",
         "now_waiting": "now waiting...",
         "done": "Done",
@@ -147,8 +156,126 @@ class Session(loader.Module):
         "provide_phone": "<b>Provide phone number.</b>",
         "provide_code": "<b>Provide code.</b>",
         "provide_password": "<b>Provide password.</b>",
-        "provide_value": "<b>Provide value.</b>",
-        "config_updated": "<b>{key} updated.</b>"
+        "not_authorized": "Session not authorized",
+    }
+
+    strings_ru = {
+        "line": "--------------------",
+        "usage": (
+            "<b>Session Manager</b>\n\n"
+            "<b>Создание:</b>\n"
+            "<code>{prefix}session create string</code>\n"
+            "<code>{prefix}session create file</code>\n"
+            "<code>{prefix}session create hex</code>\n"
+            "<code>{prefix}session phone/code/password</code>\n\n"
+            "<b>Конвертация:</b>\n"
+            "<code>{prefix}session convert hex_to_string</code>\n"
+            "<code>{prefix}session convert hex_to_file</code>\n"
+            "<code>{prefix}session convert string_to_hex</code>\n"
+            "<code>{prefix}session convert string_to_file</code>\n"
+            "<code>{prefix}session convert file_to_string</code>\n"
+            "<code>{prefix}session convert file_to_hex</code>\n"
+            "<code>{prefix}session convert dc [id]</code>\n\n"
+            "<b>Тест:</b>\n"
+            "<code>{prefix}session test</code>\n"
+            "<code>{prefix}session test dc [id]</code>\n\n"
+            "<code>{prefix}session terminate</code>\n"
+        ),
+        "create_status": (
+            "<b>{status_text}</b>\n"
+            "{line}\n"
+            "<blockquote>"
+            "Формат: {output_type}\n"
+            "API ID: {api_id_st}\n"
+            "API HASH: {api_hash_st}\n"
+            "Телефон: {phone_st}\n"
+            "Код: {code_st}\n"
+            "Пароль: {pass_st}"
+            "</blockquote>\n"
+            "<b>Результат:</b>\n"
+            "<blockquote>{result_st}</blockquote>\n"
+            "{line}\n"
+            "Время выполнения: {exec_time} сек"
+        ),
+        "convert_status": (
+            "<b>{status_text}</b>\n"
+            "{line}\n"
+            "<blockquote>"
+            "Режим: {mode}\n"
+            "Ввод: {input_st}\n"
+            "DC ID: {dc_st}"
+            "</blockquote>\n"
+            "<b>Результат:</b>\n"
+            "<blockquote>{result_st}</blockquote>\n"
+            "{line}\n"
+            "Время выполнения: {exec_time} сек"
+        ),
+        "test_status": (
+            "<b>{status_text}</b>\n"
+            "{line}\n"
+            "<blockquote>"
+            "Ввод: {input_st}\n"
+            "DC ID: {dc_st}\n"
+            "Соединение: {conn_st}"
+            "</blockquote>\n"
+            "{line}\n"
+            "Время выполнения: {exec_time} сек"
+        ),
+        "test_success": (
+            "<b>Сессия валидна</b>\n"
+            "{line}\n"
+            "<blockquote>"
+            "Юзер: {user_link}\n"
+            "ID: <code>{user_id}</code>\n"
+            "DC: <code>{dc_id}</code>\n"
+            "IP сервера: <code>{ip}</code>\n"
+            "Порт: <code>{port}</code>\n"
+            "Auth Key: <code>{key_len} байт</code>\n"
+            "Премиум: {premium}\n"
+            "Статус: <b>OK</b>"
+            "</blockquote>\n"
+            "{line}"
+        ),
+        "test_fail": (
+            "<b>Сессия невалидна</b>\n"
+            "{line}\n"
+            "<blockquote>Причина: {reason}</blockquote>\n"
+            "{line}"
+        ),
+        "test_info_only": (
+            "<b>Информация о сессии</b> (не авторизована)\n"
+            "{line}\n"
+            "<blockquote>"
+            "DC ID: <code>{dc_id}</code>\n"
+            "IP сервера: <code>{ip}</code>\n"
+            "Порт: <code>{port}</code>\n"
+            "Auth Key: <code>{key_len} байт</code>"
+            "</blockquote>\n"
+            "{line}"
+        ),
+        "file_caption": "<b>String → File</b>",
+        "err_running": "<b>Ошибка:</b> Процесс запущен. Используй <code>{prefix}session terminate</code>",
+        "err_no_process": "<b>Ошибка:</b> Нет активного процесса.",
+        "err_wrong_step": "<b>Ошибка:</b> Неверный шаг. Текущий: <b>{step}</b>",
+        "err_no_file": "<b>Ошибка:</b> Ответь на .session файл.",
+        "err_invalid_file": "<b>Ошибка:</b> Невалидный .session файл.",
+        "err_no_hex": "<b>Ошибка:</b> Нет валидного HEX (512 символов).",
+        "err_no_string": "<b>Ошибка:</b> Нет валидной StringSession.",
+        "err_invalid_dc": "<b>Ошибка:</b> DC ID должен быть 1-5.",
+        "err_file_create": "<b>Ошибка:</b> Не удалось создать/отправить файл.",
+        "terminated": "<b>Процесс завершён.</b>",
+        "success": "Успешно завершено",
+        "creating": "Создание новой сессии...",
+        "converting": "Конвертация сессии...",
+        "checking": "Проверка сессии...",
+        "wait": "ожидание",
+        "now_waiting": "ожидание ввода...",
+        "done": "Готово",
+        "ok": "OK",
+        "provide_phone": "<b>Укажите номер телефона.</b>",
+        "provide_code": "<b>Укажите код.</b>",
+        "provide_password": "<b>Укажите пароль.</b>",
+        "not_authorized": "Сессия не авторизована",
     }
 
     _DC_IP_MAP = {
@@ -161,8 +288,18 @@ class Session(loader.Module):
 
     def __init__(self):
         self.config = loader.ModuleConfig(
-            "API_ID", 2040, "Telegram API ID",
-            "API_HASH", "b18441a1ff607e10a989891a5462e627", "Telegram API Hash"
+            loader.ConfigValue(
+                "API_ID",
+                2040,
+                "Telegram API ID",
+                validator=loader.validators.Integer(),
+            ),
+            loader.ConfigValue(
+                "API_HASH",
+                "b18441a1ff607e10a989891a5462e627",
+                "Telegram API Hash",
+                validator=loader.validators.Hidden(),
+            ),
         )
         self._active = False
         self._session_client = None
@@ -191,6 +328,9 @@ class Session(loader.Module):
                 shutil.rmtree(self._temp_dir)
             except:
                 pass
+
+    def _get_prefix(self):
+        return self.get_prefix() if hasattr(self, "get_prefix") else "."
 
     def _get_topic_id(self, message: Message):
         reply_to = getattr(message, 'reply_to', None)
@@ -415,8 +555,6 @@ class Session(loader.Module):
                 await self._update_create_status()
             elif self._mode == "convert":
                 await self._update_convert_status()
-            elif self._mode == "info":
-                await self._update_info_status()
             elif self._mode == "test":
                 await self._update_test_status()
         except:
@@ -446,7 +584,7 @@ class Session(loader.Module):
     async def _update_convert_status(self):
         status_text = self.strings["success"] if self._step == "done" else self.strings["converting"]
         input_st = self.strings["done"] if self._data.get('input_ready') else self.strings["now_waiting"]
-        dc_st = (f"<b>{self._data.get('dc_id')}</b>" if self._data.get('dc_id') else 
+        dc_st = (f"<b>{self._data.get('dc_id')}</b>" if self._data.get('dc_id') else
             (self.strings["now_waiting"] if self._step == "dc" else self.strings["wait"]))
         result_st = self._data.get('result_display', self.strings["wait"])
         msg_text = self.strings["convert_status"].format(
@@ -460,24 +598,10 @@ class Session(loader.Module):
         except:
             pass
 
-    async def _update_info_status(self):
-        status_text = self.strings["success"] if self._step == "done" else self.strings["getting_info"]
-        input_st = self.strings["done"] if self._data.get('input_ready') else self.strings["now_waiting"]
-        dc_st = (f"<b>{self._data.get('dc_id')}</b>" if self._data.get('dc_id') else 
-            (self.strings["now_waiting"] if self._step == "dc" else self.strings["wait"]))
-        msg_text = self.strings["info_status"].format(
-            status_text=status_text, line=self.strings["line"],
-            input_st=input_st, dc_st=dc_st, exec_time=self._get_exec_time()
-        )
-        try:
-            self._status_msg = await utils.answer(self._status_msg, msg_text)
-        except:
-            pass
-
     async def _update_test_status(self):
         status_text = self.strings["success"] if self._step == "done" else self.strings["checking"]
         input_st = self.strings["done"] if self._data.get('input_ready') else self.strings["now_waiting"]
-        dc_st = (f"<b>{self._data.get('dc_id')}</b>" if self._data.get('dc_id') else 
+        dc_st = (f"<b>{self._data.get('dc_id')}</b>" if self._data.get('dc_id') else
             (self.strings["now_waiting"] if self._step == "dc" else self.strings["wait"]))
         conn_st = self._data.get('conn_status', self.strings["wait"])
         msg_text = self.strings["test_status"].format(
@@ -490,11 +614,15 @@ class Session(loader.Module):
         except:
             pass
 
-    @loader.command(ru_doc="Session manager")
+    @loader.command(
+        ru_doc="Менеджер сессий",
+        en_doc="Session manager",
+    )
     async def session(self, message: Message):
         args = utils.get_args_raw(message).split()
+        prefix = self._get_prefix()
         if not args:
-            await utils.answer(message, self.strings["usage"])
+            await utils.answer(message, self.strings["usage"].format(prefix=prefix))
             return
         cmd = args[0].lower()
         if cmd == "create":
@@ -507,19 +635,18 @@ class Session(loader.Module):
             await self._handle_password(message, args)
         elif cmd == "convert":
             await self._handle_convert(message, args)
-        elif cmd == "info":
-            await self._handle_info(message, args)
         elif cmd == "test":
             await self._handle_test(message, args)
-        elif cmd in ["id", "hash"]:
-            await self._handle_config(message, args, cmd)
         elif cmd == "terminate":
             await self._cleanup()
             await utils.answer(message, self.strings["terminated"])
+        else:
+            await utils.answer(message, self.strings["usage"].format(prefix=prefix))
 
     async def _handle_create(self, message: Message, args):
+        prefix = self._get_prefix()
         if self._active:
-            return await utils.answer(message, self.strings["err_running"])
+            return await utils.answer(message, self.strings["err_running"].format(prefix=prefix))
         output_type = args[1].lower() if len(args) > 1 else "string"
         if output_type not in ["string", "file", "hex"]:
             output_type = "string"
@@ -534,8 +661,8 @@ class Session(loader.Module):
         self._origin_message = message
         try:
             self._session_client = TelegramClient(
-                StringSession(), 
-                int(self.config["API_ID"]), 
+                StringSession(),
+                int(self.config["API_ID"]),
                 self.config["API_HASH"]
             )
             await self._session_client.connect()
@@ -610,12 +737,12 @@ class Session(loader.Module):
                     pass
             self._active = False
             if self._output_type == "string":
-                self._data['result_display'] = f"\n<code>{string_session}</code>"
+                self._data['result_display'] = f"<code>{string_session}</code>"
                 await self._update_status()
             elif self._output_type == "hex":
                 if parsed:
                     hex_key = self._auth_key_to_hex(parsed['auth_key'])
-                    self._data['result_display'] = f"\nDC: <code>{parsed['dc_id']}</code>\nHEX:\n<code>{hex_key}</code>"
+                    self._data['result_display'] = f"DC: <code>{parsed['dc_id']}</code>\nHEX:\n<code>{hex_key}</code>"
                 else:
                     self._data['result_display'] = "<b>Error parsing</b>"
                 await self._update_status()
@@ -646,8 +773,9 @@ class Session(loader.Module):
             self._active = False
 
     async def _handle_convert(self, message: Message, args):
+        prefix = self._get_prefix()
         if len(args) < 2:
-            return await utils.answer(message, self.strings["usage"])
+            return await utils.answer(message, self.strings["usage"].format(prefix=prefix))
         sub_cmd = args[1].lower()
         if sub_cmd == "dc":
             if not self._active or self._mode != "convert":
@@ -663,7 +791,7 @@ class Session(loader.Module):
                 await utils.answer(message, self.strings["err_invalid_dc"])
             return
         if self._active:
-            return await utils.answer(message, self.strings["err_running"])
+            return await utils.answer(message, self.strings["err_running"].format(prefix=prefix))
         reply = await message.get_reply_message()
         self._chat_id = message.chat_id
         self._topic_id = self._get_topic_id(message)
@@ -681,7 +809,7 @@ class Session(loader.Module):
         elif sub_cmd == "file_to_hex":
             await self._convert_file_to_hex(message, reply)
         else:
-            await utils.answer(message, self.strings["usage"])
+            await utils.answer(message, self.strings["usage"].format(prefix=prefix))
 
     async def _convert_hex_to_string(self, message: Message, args, reply):
         hex_key = None
@@ -737,7 +865,14 @@ class Session(loader.Module):
         if not parsed:
             return await utils.answer(message, self.strings["err_no_string"])
         hex_key = self._auth_key_to_hex(parsed['auth_key'])
-        result = f"<b>String → HEX</b>\n{self.strings['line']}\nDC: <code>{parsed['dc_id']}</code>\nHEX:\n<code>{hex_key}</code>"
+        result = (
+            f"<b>String → HEX</b>\n"
+            f"{self.strings['line']}\n"
+            f"<blockquote>"
+            f"DC: <code>{parsed['dc_id']}</code>\n"
+            f"HEX:\n<code>{hex_key}</code>"
+            f"</blockquote>"
+        )
         await utils.answer(message, result)
 
     async def _convert_string_to_file(self, message: Message, args, reply):
@@ -782,7 +917,11 @@ class Session(loader.Module):
             string_session = self._build_string_session(data['dc_id'], data['auth_key'])
             if not string_session:
                 return await utils.answer(message, self.strings["err_invalid_file"])
-            result = f"<b>File → String</b>\n{self.strings['line']}\n<code>{string_session}</code>"
+            result = (
+                f"<b>File → String</b>\n"
+                f"{self.strings['line']}\n"
+                f"<blockquote><code>{string_session}</code></blockquote>"
+            )
             await utils.answer(message, result)
         except Exception as e:
             await utils.answer(message, f"<b>Error:</b> {str(e)}")
@@ -802,7 +941,14 @@ class Session(loader.Module):
             if not data:
                 return await utils.answer(message, self.strings["err_invalid_file"])
             hex_key = self._auth_key_to_hex(data['auth_key'])
-            result = f"<b>File → HEX</b>\n{self.strings['line']}\nDC: <code>{data['dc_id']}</code>\nHEX:\n<code>{hex_key}</code>"
+            result = (
+                f"<b>File → HEX</b>\n"
+                f"{self.strings['line']}\n"
+                f"<blockquote>"
+                f"DC: <code>{data['dc_id']}</code>\n"
+                f"HEX:\n<code>{hex_key}</code>"
+                f"</blockquote>"
+            )
             await utils.answer(message, result)
         except Exception as e:
             await utils.answer(message, f"<b>Error:</b> {str(e)}")
@@ -827,7 +973,7 @@ class Session(loader.Module):
             if target == 'string':
                 string_session = self._build_string_session(dc_id, auth_key)
                 if string_session:
-                    self._data['result_display'] = f"\n<code>{string_session}</code>"
+                    self._data['result_display'] = f"<code>{string_session}</code>"
                 else:
                     self._data['result_display'] = "<b>Error building session</b>"
                 await self._update_status()
@@ -850,86 +996,8 @@ class Session(loader.Module):
         except:
             self._active = False
 
-    async def _handle_info(self, message: Message, args):
-        if len(args) > 1 and args[1].lower() == "dc":
-            if not self._active or self._mode != "info":
-                return await utils.answer(message, self.strings["err_no_process"])
-            try:
-                dc_id = int(args[2])
-                if dc_id not in self._DC_IP_MAP:
-                    raise ValueError
-                self._data['dc_id'] = dc_id
-                await message.delete()
-                await self._finalize_info()
-            except (ValueError, IndexError):
-                await utils.answer(message, self.strings["err_invalid_dc"])
-            return
-        if self._active:
-            return await utils.answer(message, self.strings["err_running"])
-        reply = await message.get_reply_message()
-        input_text = " ".join(args[1:]) if len(args) > 1 else ""
-        if reply:
-            input_text = reply.text or ""
-        string_session = self._find_string_session(input_text)
-        if string_session:
-            parsed = self._parse_string_session(string_session)
-            if parsed:
-                result = self.strings["info_result"].format(
-                    line=self.strings["line"], dc_id=parsed['dc_id'],
-                    ip=parsed['ip'], port=parsed['port'], key_len=len(parsed['auth_key'])
-                )
-                return await utils.answer(message, result)
-        hex_key = self._find_hex_key(input_text)
-        if hex_key:
-            self._active = True
-            self._start_time = time.perf_counter()
-            self._mode = "info"
-            self._step = "dc"
-            self._chat_id = message.chat_id
-            self._topic_id = self._get_topic_id(message)
-            self._data = {'hex_key': hex_key, 'input_ready': True}
-            self._status_msg = await utils.answer(message, self.strings["getting_info"])
-            self._loop_task = asyncio.create_task(self._update_loop())
-            return
-        if reply and reply.file and reply.file.name and reply.file.name.endswith('.session'):
-            file_path = os.path.join(self._temp_dir, "info.session")
-            try:
-                await reply.download_media(file_path)
-                data = await self._read_session_file(file_path)
-                if data:
-                    ip = self._DC_IP_MAP.get(data['dc_id'], 'unknown')
-                    result = self.strings["info_result"].format(
-                        line=self.strings["line"], dc_id=data['dc_id'],
-                        ip=ip, port=443, key_len=len(data['auth_key'])
-                    )
-                    return await utils.answer(message, result)
-            except:
-                pass
-            finally:
-                if os.path.exists(file_path):
-                    os.remove(file_path)
-        await utils.answer(message, self.strings["err_no_string"])
-
-    async def _finalize_info(self):
-        try:
-            self._step = "done"
-            if self._loop_task:
-                self._loop_task.cancel()
-                try:
-                    await self._loop_task
-                except asyncio.CancelledError:
-                    pass
-            self._active = False
-            dc_id = self._data['dc_id']
-            ip = self._DC_IP_MAP.get(dc_id, 'unknown')
-            result = self.strings["info_result"].format(
-                line=self.strings["line"], dc_id=dc_id, ip=ip, port=443, key_len=256
-            )
-            await utils.answer(self._status_msg, result)
-        except:
-            self._active = False
-
     async def _handle_test(self, message: Message, args):
+        prefix = self._get_prefix()
         if len(args) > 1 and args[1].lower() == "dc":
             if not self._active or self._mode != "test":
                 return await utils.answer(message, self.strings["err_no_process"])
@@ -944,7 +1012,7 @@ class Session(loader.Module):
                 await utils.answer(message, self.strings["err_invalid_dc"])
             return
         if self._active:
-            return await utils.answer(message, self.strings["err_running"])
+            return await utils.answer(message, self.strings["err_running"].format(prefix=prefix))
         reply = await message.get_reply_message()
         input_text = " ".join(args[1:]) if len(args) > 1 else ""
         if reply:
@@ -983,6 +1051,7 @@ class Session(loader.Module):
         await utils.answer(message, self.strings["err_no_string"])
 
     async def _test_string_session(self, message: Message, string_session):
+        parsed = self._parse_string_session(string_session)
         test_client = None
         try:
             test_client = TelegramClient(
@@ -992,6 +1061,21 @@ class Session(loader.Module):
             )
             await test_client.connect()
             me = await test_client.get_me()
+            if me is None:
+                if parsed:
+                    result = self.strings["test_info_only"].format(
+                        line=self.strings["line"],
+                        dc_id=parsed['dc_id'],
+                        ip=parsed['ip'],
+                        port=parsed['port'],
+                        key_len=len(parsed['auth_key']),
+                    )
+                else:
+                    result = self.strings["test_fail"].format(
+                        line=self.strings["line"],
+                        reason=self.strings["not_authorized"],
+                    )
+                return await utils.answer(message, result)
             username = None
             if hasattr(me, 'usernames') and me.usernames:
                 username = me.usernames[0].username
@@ -1001,18 +1085,33 @@ class Session(loader.Module):
             last_name = getattr(me, 'last_name', '') or ''
             full_name = f"{first_name} {last_name}".strip() or "Unknown"
             if username:
-                user_link = f"<a href='{username}'>{full_name}</a>"
+                user_link = f"<a href='tg://resolve?domain={username}'>{full_name}</a>"
             else:
-                user_link = f"<a href='https://t.me/@id{me.id}'>{full_name}</a>"
-            parsed = self._parse_string_session(string_session)
+                user_link = f"<a href='tg://user?id={me.id}'>{full_name}</a>"
             dc_id = parsed['dc_id'] if parsed else "?"
+            ip = parsed['ip'] if parsed else "?"
+            port = parsed['port'] if parsed else "?"
+            key_len = len(parsed['auth_key']) if parsed else "?"
             result = self.strings["test_success"].format(
                 line=self.strings["line"], user_link=user_link, user_id=me.id,
-                dc_id=dc_id, premium="Yes" if getattr(me, 'premium', False) else "No"
+                dc_id=dc_id, ip=ip, port=port, key_len=key_len,
+                premium="Yes" if getattr(me, 'premium', False) else "No"
             )
             await utils.answer(message, result)
         except AuthKeyUnregisteredError:
-            result = self.strings["test_fail"].format(line=self.strings["line"], reason="Session Revoked")
+            if parsed:
+                result = self.strings["test_info_only"].format(
+                    line=self.strings["line"],
+                    dc_id=parsed['dc_id'],
+                    ip=parsed['ip'],
+                    port=parsed['port'],
+                    key_len=len(parsed['auth_key']),
+                )
+                result += "\n" + self.strings["test_fail"].format(
+                    line=self.strings["line"], reason="Session Revoked"
+                )
+            else:
+                result = self.strings["test_fail"].format(line=self.strings["line"], reason="Session Revoked")
             await utils.answer(message, result)
         except UserDeactivatedBanError:
             result = self.strings["test_fail"].format(line=self.strings["line"], reason="Account Banned")
@@ -1044,6 +1143,7 @@ class Session(loader.Module):
             if not string_session:
                 await utils.answer(self._status_msg, "<b>Error building session</b>")
                 return
+            parsed = self._parse_string_session(string_session)
             test_client = None
             try:
                 test_client = TelegramClient(
@@ -1053,6 +1153,22 @@ class Session(loader.Module):
                 )
                 await test_client.connect()
                 me = await test_client.get_me()
+                if me is None:
+                    if parsed:
+                        result = self.strings["test_info_only"].format(
+                            line=self.strings["line"],
+                            dc_id=parsed['dc_id'],
+                            ip=parsed['ip'],
+                            port=parsed['port'],
+                            key_len=len(parsed['auth_key']),
+                        )
+                    else:
+                        result = self.strings["test_fail"].format(
+                            line=self.strings["line"],
+                            reason=self.strings["not_authorized"],
+                        )
+                    await utils.answer(self._status_msg, result)
+                    return
                 username = None
                 if hasattr(me, 'usernames') and me.usernames:
                     username = me.usernames[0].username
@@ -1065,13 +1181,29 @@ class Session(loader.Module):
                     user_link = f"<a href='tg://resolve?domain={username}'>{full_name}</a>"
                 else:
                     user_link = f"<a href='tg://user?id={me.id}'>{full_name}</a>"
+                ip = parsed['ip'] if parsed else "?"
+                port = parsed['port'] if parsed else "?"
+                key_len = len(parsed['auth_key']) if parsed else "?"
                 result = self.strings["test_success"].format(
                     line=self.strings["line"], user_link=user_link, user_id=me.id,
-                    dc_id=dc_id, premium="Yes" if getattr(me, 'premium', False) else "No"
+                    dc_id=dc_id, ip=ip, port=port, key_len=key_len,
+                    premium="Yes" if getattr(me, 'premium', False) else "No"
                 )
                 await utils.answer(self._status_msg, result)
             except AuthKeyUnregisteredError:
-                result = self.strings["test_fail"].format(line=self.strings["line"], reason="Session Revoked")
+                if parsed:
+                    result = self.strings["test_info_only"].format(
+                        line=self.strings["line"],
+                        dc_id=parsed['dc_id'],
+                        ip=parsed['ip'],
+                        port=parsed['port'],
+                        key_len=len(parsed['auth_key']),
+                    )
+                    result += "\n" + self.strings["test_fail"].format(
+                        line=self.strings["line"], reason="Session Revoked"
+                    )
+                else:
+                    result = self.strings["test_fail"].format(line=self.strings["line"], reason="Session Revoked")
                 await utils.answer(self._status_msg, result)
             except UserDeactivatedBanError:
                 result = self.strings["test_fail"].format(line=self.strings["line"], reason="Account Banned")
@@ -1087,21 +1219,6 @@ class Session(loader.Module):
                         pass
         except:
             self._active = False
-
-    async def _handle_config(self, message: Message, args, cmd):
-        val = args[1] if len(args) > 1 else None
-        if not val:
-            reply = await message.get_reply_message()
-            if reply:
-                val = reply.text
-        if not val:
-            return await utils.answer(message, self.strings["provide_value"])
-        cfg_key = "API_ID" if cmd == "id" else "API_HASH"
-        try:
-            self.config[cfg_key] = int(val) if cmd == "id" else val
-            await utils.answer(message, self.strings["config_updated"].format(key=cfg_key))
-        except ValueError:
-            await utils.answer(message, "<b>Error:</b> Invalid value")
 
     async def _cleanup(self):
         self._active = False
