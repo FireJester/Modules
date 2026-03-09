@@ -39,7 +39,7 @@ class Test(loader.Module):
 
         "speed_progress": "<b>Running speed test...</b>",
         "speed_result": (
-            "<b>Speed Test Results</b>\n\n"
+            "<b>Speed Test Results</b>\n"
             "<b>Download:</b>\n"
             "<blockquote>{download}</blockquote>\n\n"
             "<b>Upload:</b>\n"
@@ -47,42 +47,42 @@ class Test(loader.Module):
             "<b>Latency:</b>\n"
             "<blockquote>{latency}</blockquote>"
         ),
-        "speed_fail": "<b>Speed test failed</b>\n\n<code>{error}</code>",
+        "speed_fail": "<b>Speed test failed</b>\n<code>{error}</code>",
 
         "net_stats": (
             "<b>Network Statistics</b>\n\n"
             "<b>Interfaces:</b>\n"
-            "<blockquote>{interfaces}</blockquote>\n\n"
+            "<blockquote>{interfaces}</blockquote>\n"
             "<b>Totals (excl. loopback):</b>\n"
             "<blockquote>"
             "RX: <code>{total_rx}</code>\n"
             "TX: <code>{total_tx}</code>\n"
             "Total: <code>{total}</code>"
-            "</blockquote>\n\n"
+            "</blockquote>\n"
             "<b>System uptime:</b> <code>{uptime}</code>"
         ),
-        "net_fail": "<b>Cannot read network stats</b>\n\n<code>{error}</code>",
+        "net_fail": "<b>Cannot read network stats</b>\n<code>{error}</code>",
 
         "ping_progress": "<b>Pinging services...</b>",
         "ping_result": (
-            "<b>Ping Results</b>\n\n"
+            "<b>Ping Results</b>\n"
             "<b>Services:</b>\n"
             "<blockquote>{services}</blockquote>\n\n"
             "<b>Telegram DC:</b>\n"
             "<blockquote>{telegram}</blockquote>"
         ),
-        "ping_fail": "<b>Ping failed</b>\n\n<code>{error}</code>",
+        "ping_fail": "<b>Ping failed</b>\n<code>{error}</code>",
 
         "dns_progress": "<b>Testing DNS resolve speed...</b>",
         "dns_result": (
-            "<b>DNS Resolve Test</b>\n\n"
+            "<b>DNS Resolve Test</b>\n"
             "<blockquote>{results}</blockquote>"
         ),
-        "dns_fail": "<b>DNS test failed</b>\n\n<code>{error}</code>",
+        "dns_fail": "<b>DNS test failed</b>\n<code>{error}</code>",
 
         "ip_progress": "<b>Getting IP info...</b>",
         "ip_result": (
-            "<b>IP Information</b>\n\n"
+            "<b>IP Information</b>\n"
             "<blockquote>"
             "IP: <code>{ip}</code>\n"
             "Country: <code>{country}</code>\n"
@@ -94,7 +94,7 @@ class Test(loader.Module):
             "Timezone: <code>{timezone}</code>"
             "</blockquote>"
         ),
-        "ip_fail": "<b>Failed to get IP info</b>\n\n<code>{error}</code>",
+        "ip_fail": "<b>Failed to get IP info</b>\n<code>{error}</code>",
     }
 
     def _format_bytes(self, b):

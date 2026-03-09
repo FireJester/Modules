@@ -1,4 +1,4 @@
-__version__ = (2, 0, 0)
+__version__ = (2, 0, 1)
 # meta developer: FireJester.t.me
 
 import asyncio
@@ -15,8 +15,12 @@ logger = logging.getLogger(__name__)
 @loader.tds
 class Deleter(loader.Module):
     """Swift deleting messages"""
+
     strings = {
         "name": "Deleter",
+    }
+
+    strings_en = {
         "help": (
             "<b>Deleter - swift message deletion</b>\n\n"
             "<b>Own messages:</b>\n"
@@ -35,6 +39,27 @@ class Deleter(loader.Module):
         "no_user": "<b>Error:</b> User not found",
         "no_perms": "<b>Error:</b> Not enough permissions to delete some messages",
         "error": "<b>Error:</b> {error}",
+    }
+
+    strings_ru = {
+        "help": (
+            "<b>Deleter - быстрое удаление сообщений</b>\n\n"
+            "<b>Свои сообщения:</b>\n"
+            "<code>{prefix}del me</code> - удалить все свои сообщения в текущем чате\n"
+            "<code>{prefix}del [n]</code> - удалить последние n своих сообщений\n"
+            "<code>{prefix}del [n]</code> (реплай) - удалить n своих сообщений до указанного сообщения\n"
+            "<code>{prefix}del now</code> - удалить свои сообщения за последние 5 минут\n"
+            "<code>{prefix}del today</code> - удалить свои сообщения с 00:00 сегодня\n\n"
+            "<b>Другие пользователи:</b>\n"
+            "<code>{prefix}del @username</code> - удалить все сообщения указанного пользователя\n"
+            "<code>{prefix}del before</code> (реплай) - удалить все сообщения от всех до указанного сообщения\n"
+            "<code>{prefix}del after</code> (реплай) - удалить все сообщения от всех после указанного сообщения\n"
+        ),
+        "no_count": "<b>Ошибка:</b> Укажите корректное количество сообщений",
+        "no_reply": "<b>Ошибка:</b> Ответьте на сообщение",
+        "no_user": "<b>Ошибка:</b> Пользователь не найден",
+        "no_perms": "<b>Ошибка:</b> Недостаточно прав для удаления некоторых сообщений",
+        "error": "<b>Ошибка:</b> {error}",
     }
 
     def _get_prefix(self):
@@ -69,7 +94,7 @@ class Deleter(loader.Module):
         return deleted, failed
 
     @loader.command(
-        ru_doc="- swift message deletion",
+        ru_doc="- быстрое удаление сообщений",
         en_doc="- swift message deletion",
     )
     async def delcmd(self, message: Message):
