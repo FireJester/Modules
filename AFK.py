@@ -1,6 +1,7 @@
 __version__ = ("-beta",1,0,1)
 # meta developer: FireJester.t.me
 # update soon.. 
+# that code is shit, do not use mf
 
 from .. import loader, utils
 import time
@@ -11,7 +12,7 @@ import pytz
 
 @loader.tds
 class AFK(loader.Module):
-
+    """that module is shit, do not use if u read this message, im fix it in future"""
     strings = {
         "name": "AFK",
         
