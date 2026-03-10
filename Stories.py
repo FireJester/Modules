@@ -1,4 +1,4 @@
-__version__ = (1, 0, 1)
+__version__ = (1, 1, 1)
 # meta developer: FireJester.t.me 
 
 import io
@@ -41,18 +41,18 @@ class Stories(loader.Module):
         "usage": (
             "<b>Stories Manager</b>\n"
             "<blockquote expandable><b>Posting (reply to photo):</b>\n"
-            "<code>stories post</code> post grid to profile\n"
-            "<code>stories post archive</code> post grid to archive\n"
-            "<code>stories post album Name</code> post to existing album\n"
-            "<code>stories post new album Name</code> post and create new album\n\n"
+            "<code>{prefix}st post</code> post grid to profile\n"
+            "<code>{prefix}st post archive</code> post grid to archive\n"
+            "<code>{prefix}st post album Name</code> post to existing album\n"
+            "<code>{prefix}st post new album Name</code> post and create new album\n\n"
             "<b>Deleting:</b>\n"
-            "<code>stories delete all</code> delete all stories\n"
-            "<code>stories delete active</code> delete only active (in profile)\n"
-            "<code>stories delete archive</code> delete only archived\n"
-            "<code>stories delete album Name</code> delete album with stories\n\n"
+            "<code>{prefix}st delete all</code> delete all stories\n"
+            "<code>{prefix}st delete active</code> delete only active (in profile)\n"
+            "<code>{prefix}st delete archive</code> delete only archived\n"
+            "<code>{prefix}st delete album Name</code> delete album with stories\n\n"
             "<b>Archiving:</b>\n"
-            "<code>stories archive</code> move all active to archive\n"
-            "<code>stories unarchive</code> move all archived to profile\n\n"
+            "<code>{prefix}st archive</code> move all active to archive\n"
+            "<code>{prefix}st unarchive</code> move all archived to profile\n\n"
             "<b>Supported aspect ratios:</b>\n"
             "5:4 (1.25) 2 rows, 6 stories\n"
             "4:5 (0.80) 3 rows, 9 stories\n"
@@ -99,18 +99,18 @@ class Stories(loader.Module):
         "usage": (
             "<b>Менеджер историй</b>\n"
             "<blockquote expandable><b>Публикация (ответ на фото):</b>\n"
-            "<code>stories post</code> опубликовать сетку в профиль\n"
-            "<code>stories post archive</code> опубликовать сетку в архив\n"
-            "<code>stories post album Название</code> опубликовать в существующий альбом\n"
-            "<code>stories post new album Название</code> опубликовать и создать новый альбом\n\n"
+            "<code>{prefix}st post</code> опубликовать сетку в профиль\n"
+            "<code>{prefix}st post archive</code> опубликовать сетку в архив\n"
+            "<code>{prefix}st post album Название</code> опубликовать в существующий альбом\n"
+            "<code>{prefix}st post new album Название</code> опубликовать и создать новый альбом\n\n"
             "<b>Удаление:</b>\n"
-            "<code>stories delete all</code> удалить все истории\n"
-            "<code>stories delete active</code> удалить только активные (в профиле)\n"
-            "<code>stories delete archive</code> удалить только архивные\n"
-            "<code>stories delete album Название</code> удалить альбом с историями\n\n"
+            "<code>{prefix}st delete all</code> удалить все истории\n"
+            "<code>{prefix}st delete active</code> удалить только активные (в профиле)\n"
+            "<code>{prefix}st delete archive</code> удалить только архивные\n"
+            "<code>{prefix}st delete album Название</code> удалить альбом с историями\n\n"
             "<b>Архивация:</b>\n"
-            "<code>stories archive</code> переместить все активные в архив\n"
-            "<code>stories unarchive</code> переместить все из архива в профиль\n\n"
+            "<code>{prefix}st archive</code> переместить все активные в архив\n"
+            "<code>{prefix}st unarchive</code> переместить все из архива в профиль\n\n"
             "<b>Поддерживаемые соотношения сторон:</b>\n"
             "5:4 (1.25) 2 ряда, 6 историй\n"
             "4:5 (0.80) 3 ряда, 9 историй\n"
@@ -270,13 +270,15 @@ class Stories(loader.Module):
         return (None, None)
 
     @loader.command(
-        ru_doc="- инструкция к модулю"
+        ru_doc="Управление историями Telegram",
+        en_doc="Manage your Telegram stories",
     )
-    async def storiescmd(self, message):
-        """- instruction for module"""
+    async def st(self, message):
+        """Manage your Telegram stories"""
         args = utils.get_args_raw(message).strip()
+        prefix = self.get_prefix()
         if not args:
-            return await utils.answer(message, self.strings("usage"))
+            return await utils.answer(message, self.strings("usage").format(prefix=prefix))
 
         parts = args.lower().split()
         cmd = parts[0]
