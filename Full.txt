@@ -1,19 +1,19 @@
-Buttons
-ChatRecovery
-DeleteMusic
-Deleter
-Grabber 
-Info
-Logger 
-Manager
-MusicX
-NewYear
-Note
-QRAuthDumper
-Session
-StarsX
-Stories
-Test
-Twin 
-XRay
-XRayKiller
+Buttons - completed
+ChatRecovery - waiting
+DeleteMusic - waiting
+Deleter - completed
+Grabber - waiting
+Info - waiting 
+Logger - completed
+Manager - no 
+MusicX - no 
+NewYear - no 
+Note - no
+QRAuthDumper - no
+Session - no
+StarsX - no
+Stories - no
+Test - no
+Twin - no
+XRay - no
+XRayKiller - no

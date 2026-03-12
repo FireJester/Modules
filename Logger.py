@@ -532,6 +532,7 @@ class Logger(loader.Module):
         en_doc="Show help for commands"
     )
     async def logger(self, message):
+        """Show help for commands"""
         args = utils.get_args_raw(message).strip().lower()
         
         if not args:
