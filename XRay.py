@@ -42,7 +42,7 @@ def _escape(text):
 
 @loader.tds
 class XRay(loader.Module):
-    """XRay VLESS+Reality"""
+    """XRay VLESS+Reality, run VPN on your host!"""
 
     strings = {
         "name": "XRay",

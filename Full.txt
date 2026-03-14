@@ -1,7 +1,7 @@
 Buttons - completed
 ChatRecovery - waiting
 DeleteMusic - waiting
-Deleter - completed
+Deleter - completed, but need optimization
 Grabber - waiting
 Info - waiting 
 Logger - completed
@@ -18,6 +18,9 @@ Twin - waiting
 XRay - waiting
 XRayKiller - completed
 Realise_soon_look_down
+InlineReels
+TONWallet
+RaidProtection
 Market
 TGWatcher 
 Botnet
