@@ -14,7 +14,9 @@ from .. import loader, utils
 class Stories(loader.Module):
     """Manage your Telegram stories"""
 
-    strings = {"name": "Stories"}
+    strings = {
+        "name": "Stories",
+    }
 
     strings_en = {
         "no_reply": "<b>Reply to photo!</b>",

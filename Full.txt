@@ -6,27 +6,14 @@ Grabber
 Info  
 Logger 
 Manager 
-MusicX ---WAITING
+MusicX   ---WAITING FOR STRINGS 
 NewYear 
 Note 
 QRAuthDumper 
 Session 
-StarsX ---WAITING 
+StarsX   ---WAITING FOR STRINGS 
 Stories 
 Test 
 Twin 
-XRay ---WAITING
+XRay     ---WAITING FOR STRINGS 
 XRayKiller 
-
-Realise_soon_look_down
-
-InlineReels
-TONWallet
-RaidProtection
-Market
-TGWatcher
-Botnet
-AIBot
-MTPProxy
-Dumper
-Uploader
