@@ -1,30 +1,32 @@
-Buttons - completed
-ChatRecovery - waiting
-DeleteMusic - waiting
-Deleter - completed, but need optimization
-Grabber - waiting
-Info - waiting 
-Logger - completed
-Manager - waiting
-MusicX - waiting
-NewYear - processing
-Note - completed
-QRAuthDumper - waiting
-Session - completed
-StarsX - waiting
-Stories - completed
-Test - completed
-Twin - waiting
-XRay - waiting
-XRayKiller - completed
+Buttons 
+ChatRecovery 
+DeleteMusic 
+Deleter 
+Grabber 
+Info  
+Logger 
+Manager 
+MusicX ---WAITING
+NewYear 
+Note 
+QRAuthDumper 
+Session 
+StarsX ---WAITING 
+Stories 
+Test 
+Twin 
+XRay ---WAITING
+XRayKiller 
+
 Realise_soon_look_down
+
 InlineReels
 TONWallet
 RaidProtection
 Market
-TGWatcher 
+TGWatcher
 Botnet
 AIBot
-MTPProxy 
+MTPProxy
 Dumper
 Uploader
