@@ -1,5 +1,5 @@
-__version__ = (1, 0, 0)
-# meta developer: FireJester.t.me 
+__version__ = (1, 0, 1)
+# meta developer: FireJester.t.me
 
 import struct
 import asyncio
@@ -28,9 +28,13 @@ class GetSavedMusic(tlobject.TLRequest):
         self.hash = hash
 
     def _bytes(self):
-        return b''.join((b'\xe3\x7f\x8dx', self.id._bytes(),
-                         struct.pack('<i', self.offset), struct.pack('<i', self.limit),
-                         struct.pack('<q', self.hash)))
+        return b''.join((
+            b'\xe3\x7f\x8dx',
+            self.id._bytes(),
+            struct.pack('<i', self.offset),
+            struct.pack('<i', self.limit),
+            struct.pack('<q', self.hash),
+        ))
 
     def read_result(self, reader):
         reader.read_int()
@@ -40,16 +44,37 @@ class GetSavedMusic(tlobject.TLRequest):
 @loader.tds
 class DeleteMusic(loader.Module):
     """Delete music in your profile"""
-    strings = {"name": "DeleteMusic"}
 
-    @loader.command()
+    strings = {
+        "name": "DeleteMusic",
+    }
+
+    strings_en = {
+        "processing": "Processing...",
+        "no_tracks": "Error: no tracks in your profile",
+        "deleted": "Deleted: {} tracks",
+        "error": "Error: {}",
+    }
+
+    strings_ru = {
+        "processing": "Обработка...",
+        "no_tracks": "Ошибка: в вашем профиле нет треков",
+        "deleted": "Удалено: {} треков",
+        "error": "Ошибка: {}",
+    }
+
+    @loader.command(
+        ru_doc="Удалить всю музыку из вашего профиля",
+        en_doc="Delete all music from your profile",
+    )
     async def clearmusiccmd(self, message):
-        await utils.answer(message, "Processing...")
+        """Delete all saved music from your profile"""
+        await utils.answer(message, self.strings["processing"])
         try:
             me = await self.client.get_input_entity("me")
             music = await self.client(GetSavedMusic(me, 0, 100, 0))
             if not music or not music.documents:
-                return await utils.answer(message, "Error: no tracks in your profile")
+                return await utils.answer(message, self.strings["no_tracks"])
             c = 0
             while music and music.documents:
                 for doc in music.documents:
@@ -58,15 +83,15 @@ class DeleteMusic(loader.Module):
                             id=InputDocument(
                                 id=doc.id,
                                 access_hash=doc.access_hash,
-                                file_reference=doc.file_reference
+                                file_reference=doc.file_reference,
                             ),
-                            unsave=True
+                            unsave=True,
                         ))
                         c += 1
                         await asyncio.sleep(2)
-                    except:
+                    except Exception:
                         pass
                 music = await self.client(GetSavedMusic(me, 0, 100, 0))
-            await utils.answer(message, f"Deleted: {c} tracks")
+            await utils.answer(message, self.strings["deleted"].format(c))
         except Exception as e:
-            await utils.answer(message, f"Error: {e}")
+            await utils.answer(message, self.strings["error"].format(e))
