@@ -1,4 +1,4 @@
-__version__ = (1, 0, 0)
+__version__ = (2, 0, 0)
 # meta developer: FireJester.t.me
 
 import asyncio
@@ -21,32 +21,37 @@ STRING_SESSION_PATTERN = re.compile(r'1[A-Za-z0-9_-]{200,}={0,2}')
 
 @loader.tds
 class Twin(loader.Module):
+    """Twin account manager with auto-reply and online status control"""
+
     strings = {
         "name": "Twin",
+    }
+
+    strings_en = {
         "line": "--------------------",
         "help": (
             "<b>Twin Account Manager</b>\n\n"
             "<b>Session:</b>\n"
-            "<code>.twin add [session]</code> - add session\n"
-            "<code>.twin remove</code> - remove session\n"
-            "<code>.twin status</code> - connection status\n\n"
+            "<code>{prefix}twin add [session]</code> - add session\n"
+            "<code>{prefix}twin remove</code> - remove session\n"
+            "<code>{prefix}twin status</code> - connection status\n\n"
             "<b>Settings:</b>\n"
-            "<code>.twin timezone [-12..12]</code> - set timezone\n"
-            "<code>.twin nick [name]</code> - set nickname (format: name | HH:MM)\n"
-            "<code>.twin text [text]</code> - set auto-reply text (HTML supported)\n"
-            "<code>.twin media [url]</code> - set media for auto-reply\n"
-            "<code>.twin online</code> - set online status\n"
-            "<code>.twin offline</code> - set offline status\n\n"
+            "<code>{prefix}twin timezone [-12..12]</code> - set timezone\n"
+            "<code>{prefix}twin nick [name]</code> - set nickname (format: name | HH:MM)\n"
+            "<code>{prefix}twin text [text]</code> - set auto-reply text (HTML supported)\n"
+            "<code>{prefix}twin media [url]</code> - set media for auto-reply\n"
+            "<code>{prefix}twin online</code> - set online status\n"
+            "<code>{prefix}twin offline</code> - set offline status\n\n"
             "<b>Triggers:</b>\n"
-            "<code>.twin target [words...]</code> - add triggers (max 10)\n"
-            "<code>.twin target clear</code> - clear triggers\n"
-            "<code>.twin target list</code> - list triggers\n"
+            "<code>{prefix}twin target [words...]</code> - add triggers (max 10)\n"
+            "<code>{prefix}twin target clear</code> - clear triggers\n"
+            "<code>{prefix}twin target list</code> - list triggers\n"
         ),
-        "no_session": "<b>Error:</b> No session added. Use <code>.twin add [session]</code>",
+        "no_session": "<b>Error:</b> No session added. Use <code>{prefix}twin add [session]</code>",
         "session_added": "<b>Session added successfully</b>\n{line}\nAccount: {name}\nID: <code>{user_id}</code>\n{line}",
         "session_removed": "<b>Session removed from memory</b>",
         "session_invalid": "<b>Error:</b> Invalid session\n{line}\nReason: {error}\n{line}",
-        "session_exists": "<b>Error:</b> Session already exists. Remove first: <code>.twin remove</code>",
+        "session_exists": "<b>Error:</b> Session already exists. Remove first: <code>{prefix}twin remove</code>",
         "provide_session": "<b>Error:</b> Provide StringSession via argument or reply",
         "timezone_set": "<b>Timezone set:</b> UTC{tz}",
         "timezone_invalid": "<b>Error:</b> Invalid timezone. Range: -12 to +12",
@@ -80,6 +85,66 @@ class Twin(loader.Module):
         "online_set": "<b>Twin account status:</b> Online\n{line}\nAccount will appear online\n{line}",
         "offline_set": "<b>Twin account status:</b> Offline\n{line}\nAccount will appear offline\n{line}",
         "online_error": "<b>Error:</b> Failed to update status",
+    }
+
+    strings_ru = {
+        "line": "--------------------",
+        "help": (
+            "<b>Twin - Менеджер второго аккаунта</b>\n\n"
+            "<b>Сессия:</b>\n"
+            "<code>{prefix}twin add [сессия]</code> - добавить сессию\n"
+            "<code>{prefix}twin remove</code> - удалить сессию\n"
+            "<code>{prefix}twin status</code> - статус подключения\n\n"
+            "<b>Настройки:</b>\n"
+            "<code>{prefix}twin timezone [-12..12]</code> - установить часовой пояс\n"
+            "<code>{prefix}twin nick [имя]</code> - установить никнейм (формат: имя | ЧЧ:ММ)\n"
+            "<code>{prefix}twin text [текст]</code> - установить текст автоответа (HTML)\n"
+            "<code>{prefix}twin media [url]</code> - установить медиа для автоответа\n"
+            "<code>{prefix}twin online</code> - установить статус онлайн\n"
+            "<code>{prefix}twin offline</code> - установить статус оффлайн\n\n"
+            "<b>Триггеры:</b>\n"
+            "<code>{prefix}twin target [слова...]</code> - добавить триггеры (макс 10)\n"
+            "<code>{prefix}twin target clear</code> - очистить триггеры\n"
+            "<code>{prefix}twin target list</code> - список триггеров\n"
+        ),
+        "no_session": "<b>Ошибка:</b> Нет сессии. Используйте <code>{prefix}twin add [сессия]</code>",
+        "session_added": "<b>Сессия успешно добавлена</b>\n{line}\nАккаунт: {name}\nID: <code>{user_id}</code>\n{line}",
+        "session_removed": "<b>Сессия удалена из памяти</b>",
+        "session_invalid": "<b>Ошибка:</b> Недействительная сессия\n{line}\nПричина: {error}\n{line}",
+        "session_exists": "<b>Ошибка:</b> Сессия уже существует. Сначала удалите: <code>{prefix}twin remove</code>",
+        "provide_session": "<b>Ошибка:</b> Укажите StringSession аргументом или ответом",
+        "timezone_set": "<b>Часовой пояс установлен:</b> UTC{tz}",
+        "timezone_invalid": "<b>Ошибка:</b> Неверный часовой пояс. Диапазон: от -12 до +12",
+        "nick_set": "<b>Никнейм установлен:</b> <code>{nick}</code>\n{line}\nФормат: {nick} | ЧЧ:ММ\n{line}",
+        "nick_provide": "<b>Ошибка:</b> Укажите никнейм",
+        "text_set": "<b>Текст автоответа установлен:</b>\n{line}\n{text}\n{line}",
+        "text_provide": "<b>Ошибка:</b> Укажите текст автоответа",
+        "media_set": "<b>Медиа успешно установлено</b>",
+        "media_removed": "<b>Медиа удалено</b>",
+        "media_invalid": "<b>Ошибка:</b> Укажите URL медиа или ответьте на медиа",
+        "target_added": "<b>Триггеры добавлены:</b>\n{line}\n{targets}\n{line}",
+        "target_cleared": "<b>Список триггеров очищен</b>",
+        "target_list": "<b>Текущие триггеры ({count}/10):</b>\n{line}\n{targets}\n{line}",
+        "target_empty": "<b>Список триггеров пуст</b>",
+        "target_max": "<b>Ошибка:</b> Максимум 10 триггеров. Текущее количество: {count}",
+        "target_provide": "<b>Ошибка:</b> Укажите слова-триггеры",
+        "status_online": (
+            "<b>Статус Twin: Онлайн</b>\n"
+            "{line}\n"
+            "Аккаунт: {name}\n"
+            "ID: <code>{user_id}</code>\n"
+            "Часовой пояс: UTC{tz}\n"
+            "Никнейм: <code>{nick}</code>\n"
+            "Триггеры: {targets}\n"
+            "Автоответ: {has_text}\n"
+            "Медиа: {has_media}\n"
+            "Режим онлайн: {online_mode}\n"
+            "{line}"
+        ),
+        "status_offline": "<b>Статус Twin: Оффлайн</b>",
+        "online_set": "<b>Статус Twin аккаунта:</b> Онлайн\n{line}\nАккаунт будет отображаться онлайн\n{line}",
+        "offline_set": "<b>Статус Twin аккаунта:</b> Оффлайн\n{line}\nАккаунт будет отображаться оффлайн\n{line}",
+        "online_error": "<b>Ошибка:</b> Не удалось обновить статус",
     }
 
     def __init__(self):
@@ -298,13 +363,21 @@ class Twin(loader.Module):
         except Exception as e:
             logger.error(f"[TWIN] Auto-reply error: {e}")
 
-    @loader.command()
+    @loader.command(
+        ru_doc="Управление Twin аккаунтом",
+        en_doc="Twin account management",
+    )
     async def twin(self, message: Message):
+        """Twin account management"""
         args = utils.get_args_raw(message)
         args_list = args.split() if args else []
+        prefix = self.get_prefix()
         
         if not args_list:
-            await utils.answer(message, self.strings["help"])
+            await utils.answer(
+                message,
+                self.strings["help"].format(prefix=prefix),
+            )
             return
         
         cmd = args_list[0].lower()
@@ -330,11 +403,18 @@ class Twin(loader.Module):
         elif cmd == "offline":
             await self._cmd_offline(message)
         else:
-            await utils.answer(message, self.strings["help"])
+            await utils.answer(
+                message,
+                self.strings["help"].format(prefix=prefix),
+            )
 
     async def _cmd_add(self, message: Message, args):
+        prefix = self.get_prefix()
         if self.config["SESSION"]:
-            return await utils.answer(message, self.strings["session_exists"])
+            return await utils.answer(
+                message,
+                self.strings["session_exists"].format(prefix=prefix),
+            )
         
         session_str = None
         
@@ -590,8 +670,12 @@ class Twin(loader.Module):
             )
 
     async def _cmd_online(self, message: Message):
+        prefix = self.get_prefix()
         if not self._connected or not self._twin_client:
-            return await utils.answer(message, self.strings["no_session"])
+            return await utils.answer(
+                message,
+                self.strings["no_session"].format(prefix=prefix),
+            )
         
         try:
             await self._twin_client(UpdateStatusRequest(offline=False))
@@ -606,8 +690,12 @@ class Twin(loader.Module):
             await utils.answer(message, self.strings["online_error"])
 
     async def _cmd_offline(self, message: Message):
+        prefix = self.get_prefix()
         if not self._connected or not self._twin_client:
-            return await utils.answer(message, self.strings["no_session"])
+            return await utils.answer(
+                message,
+                self.strings["no_session"].format(prefix=prefix),
+            )
         
         try:
             self.config["KEEP_ONLINE"] = False
