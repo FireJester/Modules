@@ -1,4 +1,4 @@
-InlineReels
+InlineDl
 TONWallet
 RaidProtection
 Market

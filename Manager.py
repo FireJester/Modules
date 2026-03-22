@@ -1091,7 +1091,6 @@ class Manager(loader.Module):
 
         dt.append(f"=== Account: {an} (ID:{me.id}) ===\n")
 
-        # Step 0: Match owner
         ok, err = await self._match_owner(client, me, an)
         sm.append(f"Match owner: {'OK' if ok else 'ERR'}")
         dt.append("\n--- Match owner ---")
@@ -1100,7 +1099,6 @@ class Manager(loader.Module):
         if ok:
             dt.append(f"  Matched (owner:{oid})")
 
-        # Step 0.5: SpamBot
         ok, err = await self._start_spambot(client, an)
         sm.append(f"SpamBot: {'OK' if ok else 'ERR'}")
         dt.append("\n--- SpamBot ---")
@@ -1112,7 +1110,6 @@ class Manager(loader.Module):
             sbid = nsb
             excl.add(sbid)
 
-        # Step 0.7: Create testflight channel and group
         ch_ent, gr_ent, cr_err = await self._create_testflight_chats(client, an)
         sm.append(f"Testflight: ch={'OK' if ch_ent else 'ERR'} gr={'OK' if gr_ent else 'ERR'}")
         dt.append("\n--- Testflight chats ---")
@@ -1125,14 +1122,13 @@ class Manager(loader.Module):
         for e in cr_err:
             dt.append(f"  ERR: {e}")
 
-        # Step 1: Clear Saved (delete all messages first, then write confirmation)
+
         cerr = await self._clear_saved(client, an)
         sm.append(f"ClearSaved: {'OK' if not cerr else 'Partial'}")
         dt.append("\n--- ClearSaved ---")
         for e in cerr:
             dt.append(f"  {e}")
 
-        # Step 1.5: Mute TG, SpamBot, Owner (but do NOT archive them)
         mute_targets = [TELEGRAM_ID]
         if sbid:
             mute_targets.append(sbid)
@@ -1153,21 +1149,18 @@ class Manager(loader.Module):
         for e in mute_errs:
             dt.append(f"  ERR: {e}")
 
-        # Step 2: Pin & order (after all pinned chats exist)
         perr = await self._pin_and_order(client, me.id, oid, sbid, an)
         sm.append(f"Pin: {'OK' if not perr else 'Partial'}")
         dt.append("\n--- Pin ---")
         for e in perr:
             dt.append(f"  ERR: {e}")
 
-        # Step 3: Mute unmuted archived
         mc, sk, merr = await self._mute_unmuted_archived(client, excl, an)
         sm.append(f"Mute archived: {mc} muted, {sk} skip")
         dt.append(f"\n--- Mute archived: {mc} muted, {sk} already ---")
         for e in merr:
             dt.append(f"  {e}")
 
-        # Step 4: Stories/albums
         da, ds, serr = await self._del_stories_albums(client, an)
         sm.append(f"Albums:{len(da)} Stories:{ds}")
         dt.append(f"\n--- Albums({len(da)}) Stories({ds}) ---")
@@ -1176,14 +1169,12 @@ class Manager(loader.Module):
         for e in serr:
             dt.append(f"  {e}")
 
-        # Step 5: Photos
         pc, p_err = await self._del_photos(client, me, an)
         sm.append(f"Photos:{pc}")
         dt.append(f"\n--- Photos:{pc} ---")
         for e in p_err:
             dt.append(f"  {e}")
 
-        # Step 6: Join folders
         flinks = self._folder_links()
         all_fp = []
         if flinks:
@@ -1195,7 +1186,6 @@ class Manager(loader.Module):
                 if i < len(flinks):
                     await asyncio.sleep(10)
 
-        # Step 7: Admin folders (channels/groups) with testflight chats
         chs, grs = await self._get_admin_chats(client)
         if ch_ent and ch_ent not in chs:
             chs.append(ch_ent)
@@ -1220,7 +1210,6 @@ class Manager(loader.Module):
                     sm.append(f"'{label}': {'Created' if ok else 'ERR'}")
                     dt.append(f"\n--- '{label}' (ID:{fid}) {len(ents)} chats ---")
 
-        # Step 8: Mute+archive folder chats
         if all_fp:
             m, m_err = await self._mute_folder_chats(client, all_fp, an)
             sm.append(f"Folder mute:{len(m)}")
@@ -1230,7 +1219,6 @@ class Manager(loader.Module):
             for e in m_err:
                 dt.append(f"  ERR: {e}")
 
-        # Step 9: Delete PMs + block
         blocked, deleted, s9e = [], [], []
         try:
             await self._ec(client)
@@ -1271,7 +1259,6 @@ class Manager(loader.Module):
         for e in s9e:
             dt.append(f"  ERR: {e}")
 
-        # Step 10: Leave non-folder chats
         left, s10e = [], []
         try:
             _, afs = await self._get_filters(client, an)
@@ -1321,7 +1308,6 @@ class Manager(loader.Module):
         for e in s10e:
             dt.append(f"  ERR: {e}")
 
-        # Step 11: Contacts
         dc, s11e = [], []
         try:
             cr = await self._sr(client, GetContactsRequest(hash=0), "GetContacts", an)
@@ -1351,7 +1337,6 @@ class Manager(loader.Module):
         for x in dc:
             dt.append(f"  {x}")
 
-        # Step 12: Archive non-excluded
         arch, ask, aerr = await self._archive_non_excluded(client, excl, an)
         sm.append(f"Archived:{len(arch)} skip:{ask}")
         dt.append(f"\n--- Archived({len(arch)}) skip({ask}) ---")
@@ -1360,14 +1345,12 @@ class Manager(loader.Module):
         for e in aerr:
             dt.append(f"  ERR: {e}")
 
-        # Step 13: Avatar
         aurl = self.config["avatar_url"]
         if aurl:
             ok, err = await self._set_avatar(client, aurl, an)
             sm.append(f"Ava: {'OK' if ok else 'ERR'}")
             dt.append(f"\n--- Ava: {'OK' if ok else err} ---")
 
-        # Step 14: Final clear saved
         await asyncio.sleep(0.5)
         cerr2 = await self._clear_saved(client, an)
         sm.append(f"FinalClear: {'OK' if not cerr2 else 'Partial'}")
