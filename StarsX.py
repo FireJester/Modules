@@ -120,7 +120,7 @@ def generate_star_invoice(
 
 @loader.tds
 class StarsX(loader.Module):
-    """Best module for telegram stars and gifts"""
+    """Best module for telegram stars and gifts. Need asess to .session files"""
 
     strings = {
         "name": "StarsX",

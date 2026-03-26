@@ -30,7 +30,7 @@ class Logger(loader.Module):
             "Now every command will be logged here, if some asshole uses your userbot I'll tag you\n\n"
         ),
         "greeting_recovery": (
-            "<b>Copy!</b>\n\n"
+            "<b>Hey!</b>\n\n"
             "Everything went to shit\nOld group disappeared somewhere, who the fuck knows what happened"
         ),
         "error_info": (

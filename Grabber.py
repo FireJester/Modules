@@ -167,7 +167,7 @@ class SafeSet:
 
 @loader.tds
 class Grabber(loader.Module):
-    """Universal media downloader via bot"""
+    """Universal media downloader via bot. Need asess to .session files."""
 
     strings = {
         "name": "Grabber",
