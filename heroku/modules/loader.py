@@ -793,6 +793,24 @@ class LoaderMod(loader.Module):
 
             return
 
+        #FIX @FireJester: Internalize module before client_ready if it's in the whitelist
+        try:
+            security = self.lookup("HerokuPluginSecurity")
+            if security and hasattr(security, "_internalized_has"):
+                module_cls_name = instance.__class__.__name__
+                if security._internalized_has(module_cls_name):
+                    security._internalize(instance)
+                    logger.debug(
+                        "Auto-internalized module %s before client_ready",
+                        module_cls_name,
+                    )
+        except Exception:
+            logger.debug(
+                "Failed to auto-internalize %s",
+                getattr(instance, "__class__", None),
+                exc_info=True,
+            )
+
         if hasattr(instance, "__version__") and isinstance(instance.__version__, tuple):
             version = (
                 "<b><i>"
@@ -1332,6 +1350,18 @@ class LoaderMod(loader.Module):
         else:
             for mod in todo.values():
                 await self.download_and_install(mod)
+
+            # FIX: Re-apply internalization after all modules are loaded
+            try:
+                security = self.lookup("HerokuPluginSecurity")
+                if security and hasattr(security, "_apply_internalized"):
+                    security._apply_internalized()
+                    logger.debug("Re-applied internalization after all modules loaded")
+            except Exception:
+                logger.debug(
+                    "Failed to re-apply internalization after module loading",
+                    exc_info=True,
+                )
 
             self.update_modules_in_db()
 
