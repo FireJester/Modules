@@ -6,14 +6,15 @@ Grabber
 Info  
 Logger 
 Manager 
-MusicX   ---WAITING FOR STRINGS 
+MusicX    
 NewYear 
 Note 
 QRAuthDumper 
+RaidProtection
 Session 
-StarsX   ---WAITING FOR STRINGS 
+StarsX    
 Stories 
 Test 
 Twin 
-XRay     ---WAITING FOR STRINGS 
+XRay      
 XRayKiller 
