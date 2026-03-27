@@ -1,4 +1,4 @@
-__version__ = (1, 3, 1)
+__version__ = (1, 3, 2)
 # meta developer: FireJester.t.me
 
 import os
@@ -120,11 +120,13 @@ def generate_star_invoice(
 
 @loader.tds
 class StarsX(loader.Module):
-    """Best module for telegram stars and gifts. Need asess to .session files"""
+    """Telegram Stars, gifts and invoice management"""
 
     strings = {
         "name": "StarsX",
+    }
 
+    strings_en = {
         "no_inline_bot": "Inline-bot not found. Enable it in config.",
         "invalid_args": "Invalid arguments.",
         "error": "Error: {error}",
@@ -134,16 +136,16 @@ class StarsX(loader.Module):
 
         "show_help": (
             "<b>Show Command</b>\n\n"
-            "<code>.show [ID/index]</code> - send gift sticker\n"
-            "<code>.show [NFT link]</code> - send NFT gift sticker\n"
-            "<code>.show list user</code> - gifts from user account\n"
-            "<code>.show list bot</code> - gifts from inline bot\n"
-            "<code>.show list [N]</code> - gifts from account N\n"
-            "<code>.show get [username/ID]</code> - saved gifts of a user\n"
-            "<code>.show get sticker [username/ID]</code> - saved gifts as stickers\n"
-            "<code>.show collections</code> - list NFT collections\n"
-            "<code>.show all [collection name/NFT link]</code> - all models of collection\n"
-            "<code>.show stop</code> - stop sending stickers"
+            "<code>{prefix}show [ID/index]</code> - send gift sticker\n"
+            "<code>{prefix}show [NFT link]</code> - send NFT gift sticker\n"
+            "<code>{prefix}show list user</code> - gifts from user account\n"
+            "<code>{prefix}show list bot</code> - gifts from inline bot\n"
+            "<code>{prefix}show list [N]</code> - gifts from account N\n"
+            "<code>{prefix}show get [username/ID]</code> - saved gifts of a user\n"
+            "<code>{prefix}show get sticker [username/ID]</code> - saved gifts as stickers\n"
+            "<code>{prefix}show collections</code> - list NFT collections\n"
+            "<code>{prefix}show all [collection name/NFT link]</code> - all models of collection\n"
+            "<code>{prefix}show stop</code> - stop sending stickers"
         ),
         "show_checking": "Searching gift info...",
         "show_invalid_arg": "Invalid argument. Use index (0-{max}) or 19-digit ID.",
@@ -191,7 +193,7 @@ class StarsX(loader.Module):
             "Sending all {count} stickers..."
         ),
         "show_all_done": "<b>{title}</b> - sent {sent}/{total} model stickers",
-        "show_all_not_found": "Collection <code>{name}</code> not found. Use <code>.show collections</code>",
+        "show_all_not_found": "Collection <code>{name}</code> not found. Use <code>{prefix}show collections</code>",
         "show_all_no_set": "Could not find sticker set for this collection.",
         "show_all_stopped": "Stopped. Sent {sent}/{total}.",
         "show_stop_done": "Stopped.",
@@ -199,28 +201,28 @@ class StarsX(loader.Module):
 
         "stars_help": (
             "<b>Stars Command</b>\n\n"
-            "<code>.stars balance user</code> - your star balance\n"
-            "<code>.stars balance bot</code> - inline bot balance\n"
-            "<code>.stars balance [N]</code> - account N balance\n"
-            "<code>.stars invoice resolution [W]x[H]</code> - set resolution\n"
-            "<code>.stars invoice photo [URL]</code> - set photo URL\n"
-            "<code>.stars invoice text [1/2] [text]</code> - set invoice text"
+            "<code>{prefix}stars balance user</code> - your star balance\n"
+            "<code>{prefix}stars balance bot</code> - inline bot balance\n"
+            "<code>{prefix}stars balance [N]</code> - account N balance\n"
+            "<code>{prefix}stars invoice resolution [W]x[H]</code> - set resolution\n"
+            "<code>{prefix}stars invoice photo [URL]</code> - set photo URL\n"
+            "<code>{prefix}stars invoice text [1/2] [text]</code> - set invoice text"
         ),
         "stars_balance_loading": "Getting balance...",
         "stars_balance_result": "<b>Balance [{source}]:</b> {amount} ☆",
         "stars_balance_error": "Balance error: {error}",
         "stars_invoice_res_set": "<b>Resolution set:</b> {width}x{height}",
-        "stars_invoice_res_invalid": "Invalid format. Use: .stars invoice resolution 512x512",
+        "stars_invoice_res_invalid": "Invalid format. Use: {prefix}stars invoice resolution 512x512",
         "stars_invoice_photo_set": "<b>Photo URL set:</b> {url}",
         "stars_invoice_photo_reset": "Photo URL reset.",
-        "stars_invoice_photo_invalid": "Specify URL: .stars invoice photo https://...",
+        "stars_invoice_photo_invalid": "Specify URL: {prefix}stars invoice photo https://...",
         "stars_invoice_text_set": "<b>Text #{num} set:</b> {text}",
         "stars_invoice_text_reset": "Text #{num} reset.",
-        "stars_invoice_text_invalid": "Invalid format. Use: .stars invoice text [1/2] [text]",
+        "stars_invoice_text_invalid": "Invalid format. Use: {prefix}stars invoice text [1/2] [text]",
 
         "gift_help": (
             "<b>Gift Command</b>\n\n"
-            "<code>.gift from [user/bot/N] to [user/channel] [target] [gift] [count] [comment]</code>\n\n"
+            "<code>{prefix}gift from [user/bot/N] to [user/channel] [target] [gift] [count] [comment]</code>\n\n"
             "Sources: user, bot, N (account number)\n"
             "Gift: index (0-max), 19-digit ID, prem_3, prem_6, prem_12\n"
             "Count: number of gifts to send\n\n"
@@ -248,7 +250,7 @@ class StarsX(loader.Module):
         ),
         "gift_invalid_count": "Invalid count!",
         "gift_usage": (
-            "Invalid format. See .gift for help.\n"
+            "Invalid format. See {prefix}gift for help.\n"
             "Gift IDs: https://t.me/FIRE_GIFT_ID"
         ),
         "gift_account_not_found": "Account [{num}] not found.",
@@ -257,11 +259,11 @@ class StarsX(loader.Module):
 
         "starsx_help": (
             "<b>StarsX Account Management</b>\n\n"
-            "<code>.starsx add [session/token]</code> - add account (reply or args)\n"
-            "<code>.starsx remove [N]</code> - remove account N\n"
-            "<code>.starsx remove -force</code> - remove all accounts\n"
-            "<code>.starsx list</code> - list all accounts\n"
-            "<code>.starsx info [N]</code> - account N info\n\n"
+            "<code>{prefix}starsx add [session/token]</code> - add account (reply or args)\n"
+            "<code>{prefix}starsx remove [N]</code> - remove account N\n"
+            "<code>{prefix}starsx remove -force</code> - remove all accounts\n"
+            "<code>{prefix}starsx list</code> - list all accounts\n"
+            "<code>{prefix}starsx info [N]</code> - account N info\n\n"
             "Max accounts: {max}"
         ),
         "starsx_testing": "Testing credentials...",
@@ -294,8 +296,8 @@ class StarsX(loader.Module):
 
         "refund_help": (
             "<b>Refund Command</b>\n\n"
-            "<code>.refund bot [user_id] [charge_id]</code> - refund via inline bot\n"
-            "<code>.refund [N] [user_id] [charge_id]</code> - refund via account N"
+            "<code>{prefix}refund bot [user_id] [charge_id]</code> - refund via inline bot\n"
+            "<code>{prefix}refund [N] [user_id] [charge_id]</code> - refund via account N"
         ),
         "refund_success": "<b>Refund complete!</b>\nUser: <code>{user_id}</code>\nCharge: <code>{charge_id}</code>",
         "refund_error": "Refund error: {error}",
@@ -303,8 +305,8 @@ class StarsX(loader.Module):
 
         "link_help": (
             "<b>Link Command</b>\n\n"
-            "<code>.link for [all/ID/username] [gift] [count] [comment]</code> - gift link\n"
-            "<code>.link for [N] [amount]</code> - invoice link for bot N"
+            "<code>{prefix}link for [all/ID/username] [gift] [count] [comment]</code> - gift link\n"
+            "<code>{prefix}link for [N] [amount]</code> - invoice link for bot N"
         ),
         "link_invoice_created": "<b>Invoice link created!</b>\n\nBot: [{num}]\nAmount: {amount} ☆",
         "link_not_enough_stars": "Not enough stars! Need: {need}, Have: {have}",
@@ -329,6 +331,213 @@ class StarsX(loader.Module):
         "inline_description": "Click to create invoice",
         "invoice_title_default": "Purchase {stars} Stars",
         "invoice_desc_default": "Payment for {stars} Telegram Stars",
+    }
+
+    strings_ru = {
+        "no_inline_bot": "Инлайн-бот не найден. Включите его в конфиге.",
+        "invalid_args": "Неверные аргументы.",
+        "error": "Ошибка: {error}",
+        "success": "Успешно!",
+        "loading": "Загрузка...",
+        "not_found": "Не найдено.",
+
+        "show_help": (
+            "<b>Команда Show</b>\n\n"
+            "<code>{prefix}show [ID/индекс]</code> - отправить стикер подарка\n"
+            "<code>{prefix}show [NFT ссылка]</code> - отправить стикер NFT подарка\n"
+            "<code>{prefix}show list user</code> - подарки из аккаунта пользователя\n"
+            "<code>{prefix}show list bot</code> - подарки из инлайн бота\n"
+            "<code>{prefix}show list [N]</code> - подарки из аккаунта N\n"
+            "<code>{prefix}show get [username/ID]</code> - сохранённые подарки пользователя\n"
+            "<code>{prefix}show get sticker [username/ID]</code> - сохранённые подарки как стикеры\n"
+            "<code>{prefix}show collections</code> - список NFT коллекций\n"
+            "<code>{prefix}show all [название коллекции/NFT ссылка]</code> - все модели коллекции\n"
+            "<code>{prefix}show stop</code> - остановить отправку стикеров"
+        ),
+        "show_checking": "Поиск информации о подарке...",
+        "show_invalid_arg": "Неверный аргумент. Используйте индекс (0-{max}) или 19-значный ID.",
+        "show_not_found": "Подарок не найден.",
+        "show_no_gifts": "Нет доступных подарков.",
+        "show_sticker_sent": "Стикер отправлен.",
+        "show_download_error": "Ошибка загрузки стикера: {error}",
+        "show_list_header": "<b>Доступные подарки ({count}):</b> ({source})",
+        "show_list_chunk": "<b>Часть {current}/{total}</b>\n\n",
+        "show_list_item": "Индекс: <code>{index}</code>, ID: <code>{id}</code>, Цена: {stars} ☆",
+        "show_list_bot_item": "#{index} - ID: <code>{id}</code>, {stars} ☆{limited}",
+        "show_list_empty": "Нет доступных подарков.",
+        "show_list_loading": "Загрузка списка подарков...",
+        "show_get_loading": "Загрузка подарков пользователя...",
+        "show_get_header": "<b>Подарки {user} ({count}):</b>",
+        "show_get_chunk": "<b>Часть {current}/{total}</b>\n\n",
+        "show_get_item": "#{index} - ID: <code>{id}</code>",
+        "show_get_item_unique": "#{index} - ID: <code>{id}</code> (NFT: {title})",
+        "show_get_empty": "У пользователя нет сохранённых подарков.",
+        "show_get_sticker_loading": "Загрузка подарков пользователя как стикеров...",
+        "show_get_sticker_done": "Отправлено {sent} уникальных стикеров подарков.",
+        "show_hidden_gift_info": (
+            "<b>Скрытый подарок</b> (не в публичном каталоге)\n"
+            "ID: <code>{id}</code>\n"
+            "Цена: {stars} ☆"
+        ),
+        "show_nft_gift_info": (
+            "<b>NFT Подарок:</b> {title}\n"
+            "Slug: <code>{slug}</code>\n"
+            "Модель: {model}\n"
+            "Паттерн: {pattern}\n"
+            "Фон: {backdrop}"
+        ),
+        "show_nft_loading": "Загрузка NFT подарка...",
+        "show_nft_not_found": "NFT подарок не найден или неверный slug.",
+        "show_collections_loading": "Загрузка NFT коллекций...",
+        "show_collections_header": "<b>NFT Коллекции ({count}):</b>",
+        "show_collections_item": "<code>{title}</code> - {stars} ☆ + {upgrade} ☆",
+        "show_collections_empty": "NFT коллекции не найдены.",
+        "show_all_loading": "Загрузка коллекции {name}...",
+        "show_all_info": (
+            "<b>{title}</b>\n"
+            "Всего моделей: {count}\n"
+            "Цена: {stars} ☆ + {upgrade} ☆\n\n"
+            "Отправка всех {count} стикеров..."
+        ),
+        "show_all_done": "<b>{title}</b> - отправлено {sent}/{total} стикеров моделей",
+        "show_all_not_found": "Коллекция <code>{name}</code> не найдена. Используйте <code>{prefix}show collections</code>",
+        "show_all_no_set": "Не удалось найти набор стикеров для этой коллекции.",
+        "show_all_stopped": "Остановлено. Отправлено {sent}/{total}.",
+        "show_stop_done": "Остановлено.",
+        "show_stop_nothing": "Нечего останавливать.",
+
+        "stars_help": (
+            "<b>Команда Stars</b>\n\n"
+            "<code>{prefix}stars balance user</code> - ваш баланс звёзд\n"
+            "<code>{prefix}stars balance bot</code> - баланс инлайн бота\n"
+            "<code>{prefix}stars balance [N]</code> - баланс аккаунта N\n"
+            "<code>{prefix}stars invoice resolution [W]x[H]</code> - установить разрешение\n"
+            "<code>{prefix}stars invoice photo [URL]</code> - установить URL фото\n"
+            "<code>{prefix}stars invoice text [1/2] [текст]</code> - установить текст инвойса"
+        ),
+        "stars_balance_loading": "Получение баланса...",
+        "stars_balance_result": "<b>Баланс [{source}]:</b> {amount} ☆",
+        "stars_balance_error": "Ошибка баланса: {error}",
+        "stars_invoice_res_set": "<b>Разрешение установлено:</b> {width}x{height}",
+        "stars_invoice_res_invalid": "Неверный формат. Используйте: {prefix}stars invoice resolution 512x512",
+        "stars_invoice_photo_set": "<b>URL фото установлен:</b> {url}",
+        "stars_invoice_photo_reset": "URL фото сброшен.",
+        "stars_invoice_photo_invalid": "Укажите URL: {prefix}stars invoice photo https://...",
+        "stars_invoice_text_set": "<b>Текст #{num} установлен:</b> {text}",
+        "stars_invoice_text_reset": "Текст #{num} сброшен.",
+        "stars_invoice_text_invalid": "Неверный формат. Используйте: {prefix}stars invoice text [1/2] [текст]",
+
+        "gift_help": (
+            "<b>Команда Gift</b>\n\n"
+            "<code>{prefix}gift from [user/bot/N] to [user/channel] [цель] [подарок] [кол-во] [комментарий]</code>\n\n"
+            "Источники: user, bot, N (номер аккаунта)\n"
+            "Подарок: индекс (0-max), 19-значный ID, prem_3, prem_6, prem_12\n"
+            "Кол-во: количество подарков\n\n"
+            "ID подарков: https://t.me/FIRE_GIFT_ID"
+        ),
+        "gift_sending": "Отправка подарка {current}/{total}...\nРежим: {mode}",
+        "gift_sent": (
+            "<b>Подарок отправлен!</b>\n\n"
+            "От: {from_info}\n"
+            "Кому: <code>{target}</code> ({to_type})\n"
+            "Подарок: {gift_info}\n"
+            "Кол-во: {count}\n"
+            "Комментарий: {comment}"
+        ),
+        "gift_partial": (
+            "<b>Частично отправлено!</b>\n\n"
+            "Успешно: {success}/{total}\n"
+            "Ошибки: {errors}"
+        ),
+        "gift_error": "Ошибка подарка: {error}",
+        "gift_balance_low": "Недостаточно звёзд!",
+        "gift_invalid_gift": (
+            "Неверный подарок. Используйте индекс (0-{max}), 19-значный ID, или prem_3/prem_6/prem_12.\n"
+            "ID подарков: https://t.me/FIRE_GIFT_ID"
+        ),
+        "gift_invalid_count": "Неверное количество!",
+        "gift_usage": (
+            "Неверный формат. См. {prefix}gift для помощи.\n"
+            "ID подарков: https://t.me/FIRE_GIFT_ID"
+        ),
+        "gift_account_not_found": "Аккаунт [{num}] не найден.",
+        "gift_premium_only_bot": "Премиум подарки можно отправлять только через ботов.",
+        "gift_premium_sending": "Отправка Premium {months}м ({stars} ☆) {current}/{total}...",
+
+        "starsx_help": (
+            "<b>Управление аккаунтами StarsX</b>\n\n"
+            "<code>{prefix}starsx add [сессия/токен]</code> - добавить аккаунт (реплай или аргументы)\n"
+            "<code>{prefix}starsx remove [N]</code> - удалить аккаунт N\n"
+            "<code>{prefix}starsx remove -force</code> - удалить все аккаунты\n"
+            "<code>{prefix}starsx list</code> - список всех аккаунтов\n"
+            "<code>{prefix}starsx info [N]</code> - информация об аккаунте N\n\n"
+            "Макс. аккаунтов: {max}"
+        ),
+        "starsx_testing": "Проверка учётных данных...",
+        "starsx_added": (
+            "<b>Аккаунт добавлен!</b>\n\n"
+            "Номер: <b>[{num}]</b>\n"
+            "Тип: {type}\n"
+            "Имя: {name}\n"
+            "ID: <code>{id}</code>\n"
+            "Username: {username}"
+        ),
+        "starsx_exists": "Аккаунт уже добавлен как [{num}].",
+        "starsx_invalid": "Неверный формат сессии/токена.",
+        "starsx_no_creds": "Не указана сессия или токен.",
+        "starsx_max_reached": "Достигнут максимум аккаунтов ({max})!",
+        "starsx_not_authorized": "Сессия/токен не авторизованы.",
+        "starsx_removed": "Аккаунт [{num}] удалён.",
+        "starsx_removed_all": "Все аккаунты удалены.",
+        "starsx_not_found": "Аккаунт [{num}] не найден.",
+        "starsx_list_header": "<b>Аккаунты ({count}/{max}):</b>\n\n",
+        "starsx_list_item": "[{num}] {type} | {name} | <code>{id}</code>",
+        "starsx_list_empty": "Нет добавленных аккаунтов.",
+        "starsx_info": (
+            "<blockquote><b>Аккаунт [{num}]</b>\n\n"
+            "Тип: {type}\n"
+            "Имя: {name}\n"
+            "ID: <code>{id}</code>\n"
+            "Username: {username}</blockquote>"
+        ),
+
+        "refund_help": (
+            "<b>Команда Refund</b>\n\n"
+            "<code>{prefix}refund bot [user_id] [charge_id]</code> - возврат через инлайн бота\n"
+            "<code>{prefix}refund [N] [user_id] [charge_id]</code> - возврат через аккаунт N"
+        ),
+        "refund_success": "<b>Возврат выполнен!</b>\nПользователь: <code>{user_id}</code>\nCharge: <code>{charge_id}</code>",
+        "refund_error": "Ошибка возврата: {error}",
+        "refund_not_a_bot": "Аккаунт [{num}] не является ботом!",
+
+        "link_help": (
+            "<b>Команда Link</b>\n\n"
+            "<code>{prefix}link for [all/ID/username] [подарок] [кол-во] [комментарий]</code> - ссылка на подарок\n"
+            "<code>{prefix}link for [N] [сумма]</code> - ссылка на инвойс для бота N"
+        ),
+        "link_invoice_created": "<b>Ссылка на инвойс создана!</b>\n\nБот: [{num}]\nСумма: {amount} ☆",
+        "link_not_enough_stars": "Недостаточно звёзд! Нужно: {need}, Есть: {have}",
+        "link_invalid_gift": "Неверный подарок!",
+        "link_not_a_bot": "Аккаунт [{num}] не является ботом!",
+        "link_gift_anchor": "Подарок",
+        "link_error": "Ошибка ссылки: {error}",
+        "link_bot_session_missing": "Сессия бота [{num}] не активна. Добавьте бота заново.",
+
+        "bot_start": "Бот готов! Используйте инлайн режим для инвойсов.",
+        "bot_gift_claimed": "Подарок получен! Отправка...",
+        "bot_gift_sent": "Подарок успешно отправлен!",
+        "bot_gift_error": "Ошибка подарка: {error}",
+        "bot_gift_not_for_you": "Этот подарок не для вас!",
+        "bot_gift_already_claimed": "Этот подарок уже был получен!",
+        "bot_gift_expired": "Срок действия этой ссылки истёк!",
+        "bot_refund_success": "<b>Возврат выполнен!</b>\nПользователь: <code>{user_id}</code>\nCharge: <code>{charge_id}</code>",
+        "bot_refund_error": "Ошибка возврата: {error}",
+        "bot_invoice_sent": "Инвойс на {amount} ☆ отправлен!",
+
+        "inline_title": "Оплата {stars} ☆",
+        "inline_description": "Нажмите для создания инвойса",
+        "invoice_title_default": "Покупка {stars} Stars",
+        "invoice_desc_default": "Оплата {stars} Telegram Stars",
     }
 
     def __init__(self):
@@ -947,13 +1156,15 @@ class StarsX(loader.Module):
             return None, None
 
     @loader.command(
-        ru_doc="- show gift sticker or list gifts",
-        en_doc="- show gift sticker or list gifts",
+        ru_doc="Показать стикер подарка или список подарков",
+        en_doc="Show gift sticker or list gifts",
     )
     async def show(self, message: Message):
+        """Show gift sticker or list gifts"""
         args = utils.get_args_raw(message).strip()
+        prefix = self.get_prefix()
         if not args:
-            await utils.answer(message, self.strings["show_help"])
+            await utils.answer(message, self.strings["show_help"].format(prefix=prefix))
             return
         parts = args.split()
         cmd = parts[0].lower()
@@ -972,7 +1183,7 @@ class StarsX(loader.Module):
 
         if cmd == "all":
             if len(parts) < 2:
-                await utils.answer(message, self.strings["show_help"])
+                await utils.answer(message, self.strings["show_help"].format(prefix=prefix))
                 return
             query = "".join(parts[1:])
             await self._show_all_models(message, query)
@@ -980,14 +1191,14 @@ class StarsX(loader.Module):
 
         if cmd == "list":
             if len(parts) < 2:
-                await utils.answer(message, self.strings["show_help"])
+                await utils.answer(message, self.strings["show_help"].format(prefix=prefix))
                 return
             await self._show_list(message, parts[1].lower())
             return
 
         if cmd == "get":
             if len(parts) < 2:
-                await utils.answer(message, self.strings["show_help"])
+                await utils.answer(message, self.strings["show_help"].format(prefix=prefix))
                 return
             if parts[1].lower() == "sticker" and len(parts) >= 3:
                 await self._show_get_user_stickers(message, parts[2])
@@ -1170,6 +1381,7 @@ class StarsX(loader.Module):
             await asyncio.sleep(0.5)
 
     async def _show_all_models(self, message, query):
+        prefix = self.get_prefix()
         slug = self._parse_nft_slug(query)
         if slug:
             collection_name = self._collection_from_slug(slug)
@@ -1181,7 +1393,7 @@ class StarsX(loader.Module):
 
         gift_id = self._find_collection_id(query)
         if not gift_id or gift_id not in self._collections_cache:
-            await utils.answer(message, self.strings["show_all_not_found"].format(name=query))
+            await utils.answer(message, self.strings["show_all_not_found"].format(name=query, prefix=prefix))
             return
 
         info = self._collections_cache[gift_id]
@@ -1413,7 +1625,8 @@ class StarsX(loader.Module):
                     gifts = await self._get_bot_gifts(acc["credential"])
                 source_name = f"Account [{num}]"
             except ValueError:
-                await utils.answer(status_msg, self.strings["show_help"])
+                prefix = self.get_prefix()
+                await utils.answer(status_msg, self.strings["show_help"].format(prefix=prefix))
                 return
 
         if not gifts:
@@ -1447,13 +1660,15 @@ class StarsX(loader.Module):
             await asyncio.sleep(0.5)
 
     @loader.command(
-        ru_doc="- manage balance and invoice settings",
-        en_doc="- manage balance and invoice settings",
+        ru_doc="Управление балансом и настройками инвойсов",
+        en_doc="Manage balance and invoice settings",
     )
     async def stars(self, message: Message):
+        """Manage balance and invoice settings"""
         args = utils.get_args_raw(message).strip()
+        prefix = self.get_prefix()
         if not args:
-            await utils.answer(message, self.strings["stars_help"])
+            await utils.answer(message, self.strings["stars_help"].format(prefix=prefix))
             return
         parts = args.split()
         cmd = parts[0].lower()
@@ -1462,7 +1677,7 @@ class StarsX(loader.Module):
         elif cmd == "invoice" and len(parts) >= 2:
             await self._stars_invoice(message, parts[1].lower(), parts[2:])
         else:
-            await utils.answer(message, self.strings["stars_help"])
+            await utils.answer(message, self.strings["stars_help"].format(prefix=prefix))
 
     async def _stars_balance(self, message, source):
         status_msg = await utils.answer(message, self.strings["stars_balance_loading"])
@@ -1493,7 +1708,8 @@ class StarsX(loader.Module):
                     ok, r = await self._get_bot_balance(acc["credential"])
                     sn = f"Account [{num}] (Bot)"
             except ValueError:
-                await utils.answer(status_msg, self.strings["stars_help"])
+                prefix = self.get_prefix()
+                await utils.answer(status_msg, self.strings["stars_help"].format(prefix=prefix))
                 return
         if ok:
             await utils.answer(status_msg, self.strings["stars_balance_result"].format(source=sn, amount=r))
@@ -1501,13 +1717,14 @@ class StarsX(loader.Module):
             await utils.answer(status_msg, self.strings["stars_balance_error"].format(error=r))
 
     async def _stars_invoice(self, message, subcmd, args):
+        prefix = self.get_prefix()
         if subcmd == "resolution":
             if not args:
-                await utils.answer(message, self.strings["stars_invoice_res_invalid"])
+                await utils.answer(message, self.strings["stars_invoice_res_invalid"].format(prefix=prefix))
                 return
             m = RESOLUTION_PATTERN.search(" ".join(args))
             if not m:
-                await utils.answer(message, self.strings["stars_invoice_res_invalid"])
+                await utils.answer(message, self.strings["stars_invoice_res_invalid"].format(prefix=prefix))
                 return
             w, h = int(m.group(1)), int(m.group(2))
             self.config["invoice_res_w"] = w
@@ -1520,19 +1737,19 @@ class StarsX(loader.Module):
                 return
             url = args[0]
             if not url.startswith("http"):
-                await utils.answer(message, self.strings["stars_invoice_photo_invalid"])
+                await utils.answer(message, self.strings["stars_invoice_photo_invalid"].format(prefix=prefix))
                 return
             self.config["invoice_photo"] = url
             await utils.answer(message, self.strings["stars_invoice_photo_set"].format(url=url))
         elif subcmd == "text":
             if not args:
-                await utils.answer(message, self.strings["stars_invoice_text_invalid"])
+                await utils.answer(message, self.strings["stars_invoice_text_invalid"].format(prefix=prefix))
                 return
             try:
                 num = int(args[0])
                 assert num in (1, 2)
             except Exception:
-                await utils.answer(message, self.strings["stars_invoice_text_invalid"])
+                await utils.answer(message, self.strings["stars_invoice_text_invalid"].format(prefix=prefix))
                 return
             if len(args) < 2:
                 self.config[f"invoice_text_{num}"] = ""
@@ -1542,20 +1759,22 @@ class StarsX(loader.Module):
                 self.config[f"invoice_text_{num}"] = t
                 await utils.answer(message, self.strings["stars_invoice_text_set"].format(num=num, text=t))
         else:
-            await utils.answer(message, self.strings["stars_help"])
+            await utils.answer(message, self.strings["stars_help"].format(prefix=prefix))
 
     @loader.command(
-        ru_doc="- send a gift to a user or channel",
-        en_doc="- send a gift to a user or channel",
+        ru_doc="Отправить подарок пользователю или каналу",
+        en_doc="Send a gift to a user or channel",
     )
     async def gift(self, message: Message):
+        """Send a gift to a user or channel"""
         args = utils.get_args_raw(message).strip()
+        prefix = self.get_prefix()
         if not args:
-            await utils.answer(message, self.strings["gift_help"])
+            await utils.answer(message, self.strings["gift_help"].format(prefix=prefix))
             return
         parts = args.split()
         if len(parts) < 7 or parts[0].lower() != "from" or parts[2].lower() != "to":
-            await utils.answer(message, self.strings["gift_usage"])
+            await utils.answer(message, self.strings["gift_usage"].format(prefix=prefix))
             return
 
         from_src, to_type = parts[1].lower(), parts[3].lower()
@@ -1563,7 +1782,7 @@ class StarsX(loader.Module):
         comment = " ".join(parts[7:]) if len(parts) > 7 else None
 
         if to_type not in ("user", "channel"):
-            await utils.answer(message, self.strings["gift_usage"])
+            await utils.answer(message, self.strings["gift_usage"].format(prefix=prefix))
             return
         try:
             count = int(count_arg)
@@ -1689,7 +1908,7 @@ class StarsX(loader.Module):
                 else:
                     bot_token, from_info = acc["credential"], f"Account [{num}] (Bot)"
             except ValueError:
-                await utils.answer(message, self.strings["gift_usage"])
+                await utils.answer(message, self.strings["gift_usage"].format(prefix=prefix))
                 return
 
         success, errors, status_msg = 0, [], message
@@ -1731,13 +1950,15 @@ class StarsX(loader.Module):
                 await utils.answer(status_msg, self.strings["gift_error"].format(error=err))
 
     @loader.command(
-        ru_doc="- manage connected accounts",
-        en_doc="- manage connected accounts",
+        ru_doc="Управление подключёнными аккаунтами",
+        en_doc="Manage connected accounts",
     )
     async def starsx(self, message: Message):
+        """Manage connected accounts"""
         args = utils.get_args_raw(message).strip()
+        prefix = self.get_prefix()
         if not args:
-            await utils.answer(message, self.strings["starsx_help"].format(max=MAX_ACCOUNTS))
+            await utils.answer(message, self.strings["starsx_help"].format(max=MAX_ACCOUNTS, prefix=prefix))
             return
         parts = args.split()
         cmd = parts[0].lower()
@@ -1763,7 +1984,7 @@ class StarsX(loader.Module):
             except ValueError:
                 await utils.answer(message, self.strings["invalid_args"])
         else:
-            await utils.answer(message, self.strings["starsx_help"].format(max=MAX_ACCOUNTS))
+            await utils.answer(message, self.strings["starsx_help"].format(max=MAX_ACCOUNTS, prefix=prefix))
 
     async def _starsx_add(self, message, args_text):
         credential, cred_type = None, None
@@ -1911,17 +2132,19 @@ class StarsX(loader.Module):
         )
 
     @loader.command(
-        ru_doc="- refund stars via bot",
-        en_doc="- refund stars via bot",
+        ru_doc="Возврат звёзд через бота",
+        en_doc="Refund stars via bot",
     )
     async def refund(self, message: Message):
+        """Refund stars via bot"""
         args = utils.get_args_raw(message).strip()
+        prefix = self.get_prefix()
         if not args:
-            await utils.answer(message, self.strings["refund_help"])
+            await utils.answer(message, self.strings["refund_help"].format(prefix=prefix))
             return
         parts = args.split()
         if len(parts) < 3:
-            await utils.answer(message, self.strings["refund_help"])
+            await utils.answer(message, self.strings["refund_help"].format(prefix=prefix))
             return
 
         source = parts[0].lower()
@@ -1948,7 +2171,7 @@ class StarsX(loader.Module):
                     return
                 token = acc["credential"]
             except ValueError:
-                await utils.answer(message, self.strings["refund_help"])
+                await utils.answer(message, self.strings["refund_help"].format(prefix=prefix))
                 return
 
         ok, err = await self._refund_via_bot_api(token, uid, cid)
@@ -1958,17 +2181,19 @@ class StarsX(loader.Module):
             await utils.answer(message, self.strings["refund_error"].format(error=err))
 
     @loader.command(
-        ru_doc="- create a gift or invoice link",
-        en_doc="- create a gift or invoice link",
+        ru_doc="Создать ссылку на подарок или инвойс",
+        en_doc="Create a gift or invoice link",
     )
     async def link(self, message: Message):
+        """Create a gift or invoice link"""
         args = utils.get_args_raw(message).strip()
+        prefix = self.get_prefix()
         if not args:
-            await utils.answer(message, self.strings["link_help"])
+            await utils.answer(message, self.strings["link_help"].format(prefix=prefix))
             return
         parts = args.split()
         if len(parts) < 3 or parts[0].lower() != "for":
-            await utils.answer(message, self.strings["link_help"])
+            await utils.answer(message, self.strings["link_help"].format(prefix=prefix))
             return
 
         target = parts[1]
@@ -1982,7 +2207,7 @@ class StarsX(loader.Module):
             pass
 
         if len(parts) < 4:
-            await utils.answer(message, self.strings["link_help"])
+            await utils.answer(message, self.strings["link_help"].format(prefix=prefix))
             return
 
         gift_arg, count_arg = parts[2], parts[3]
@@ -2074,10 +2299,11 @@ class StarsX(loader.Module):
             await utils.answer(message, self.strings["link_error"].format(error=str(e)[:200]))
 
     @loader.inline_handler(
-        ru_doc="[amount] - create invoice",
-        en_doc="[amount] - create invoice"
+        ru_doc="[сумма] - создать инвойс",
+        en_doc="[amount] - create invoice",
     )
     async def stars_inline_handler(self, query: InlineQuery):
+        """Create a star invoice via inline"""
         m = re.match(r'^stars\s*(\d+)$', query.query.strip().lower())
         if not m:
             return
