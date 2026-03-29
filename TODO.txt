@@ -1,8 +1,7 @@
 Market
 TGWatcher
-Botnet
 AIBot
-MTPProxy
+MTProxy
 Dumper
 Uploader
 Minecraft

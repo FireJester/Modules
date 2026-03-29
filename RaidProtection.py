@@ -399,7 +399,7 @@ class RaidProtection(loader.Module):
                 await self._client.send_message(sender_id, self.strings["raid_message"])
             except Exception as e:
                 logger.error(f"[RaidProtection] Failed to send raid message to {sender_id}: {e}")
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.2)
             try:
                 await self._client(ReportSpamRequest(peer=sender_id))
             except Exception as e:

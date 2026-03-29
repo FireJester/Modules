@@ -1,4 +1,4 @@
-__version__ = (1, 0, 1)
+__version__ = (1, 0, 2)
 # meta developer: FireJester.t.me
 
 import struct
@@ -67,7 +67,7 @@ class DeleteMusic(loader.Module):
         ru_doc="Удалить всю музыку из вашего профиля",
         en_doc="Delete all music from your profile",
     )
-    async def clearmusiccmd(self, message):
+    async def musicrm(self, message):
         """Delete all saved music from your profile"""
         await utils.answer(message, self.strings["processing"])
         try:
@@ -88,7 +88,7 @@ class DeleteMusic(loader.Module):
                             unsave=True,
                         ))
                         c += 1
-                        await asyncio.sleep(2)
+                        await asyncio.sleep(0.3)
                     except Exception:
                         pass
                 music = await self.client(GetSavedMusic(me, 0, 100, 0))
