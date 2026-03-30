@@ -42,7 +42,7 @@ class NewYear(loader.Module):
             "</blockquote>"
         ),
         "prem_new_year_template": (
-            "<emoji document_id=5318911370794671211>🎩</emoji><b> Time until New Year {year}:</b>\n\n"
+            "<emoji document_id=5318911370794671211>🎩</emoji><b> Time until New Year {year}:</b>\n"
             "<blockquote>"
             "<emoji document_id=5319037874761405673>🎆</emoji><b> Days: </b><code>{days}</code>\n"
             "<emoji document_id=5319072286039382810>🕯</emoji><b> Hours: </b><code>{hours}</code>\n"
@@ -55,7 +55,7 @@ class NewYear(loader.Module):
             "</blockquote>"
         ),
         "noprem_new_year_template": (
-            "<b>Time until New Year {year}:</b>\n\n"
+            "<b>Time until New Year {year}:</b>\n"
             "<blockquote>"
             "<b>Days: </b><code>{days}</code>\n"
             "<b>Hours: </b><code>{hours}</code>\n"
