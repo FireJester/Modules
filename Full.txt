@@ -16,6 +16,7 @@ StarsX
 Statistics
 Stories 
 Test 
+TGWatcher
 TONScanner
 Twin
 Uploader

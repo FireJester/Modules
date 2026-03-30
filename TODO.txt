@@ -1,5 +1,4 @@
 Market
-TGWatcher
 AIBot
 MTProxy
 Dumper

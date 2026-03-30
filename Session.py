@@ -1,4 +1,4 @@
-__version__ = (2, 1, 1)
+__version__ = (2, 2, 0)
 # meta developer: FireJester.t.me
 
 import logging
@@ -42,7 +42,7 @@ def _safe_disconnect(client):
 
 @loader.tds
 class Session(loader.Module):
-    """Session manager for Telegram. Need asess to .session files"""
+    """Session manager for Telegram. Need access to .session files"""
 
     strings = {
         "name": "Session",
@@ -53,30 +53,30 @@ class Session(loader.Module):
         "usage": (
             "<b>Session Manager</b>\n"
             "<b>Create:</b>\n"
-            "<blockquote><code>{prefix}session create string</code>\n"
-            "<code>{prefix}session create file</code>\n"
-            "<code>{prefix}session create hex</code>\n"
-            "<code>{prefix}session phone/code/password</code></blockquote>\n"
+            "<blockquote><code>{prefix}ss create string</code>\n"
+            "<code>{prefix}ss create file</code>\n"
+            "<code>{prefix}ss create hex</code>\n"
+            "<code>{prefix}ss phone/code/password</code></blockquote>\n"
             "<b>Convert:</b>\n"
-            "<blockquote><code>{prefix}session convert hex_to_string</code>\n"
-            "<code>{prefix}session convert hex_to_file</code>\n"
-            "<code>{prefix}session convert string_to_hex</code>\n"
-            "<code>{prefix}session convert string_to_file</code>\n"
-            "<code>{prefix}session convert file_to_string</code>\n"
-            "<code>{prefix}session convert file_to_hex</code>\n"
-            "<code>{prefix}session convert dc [id]</code></blockquote>\n"
+            "<blockquote><code>{prefix}ss convert hex_to_string</code>\n"
+            "<code>{prefix}ss convert hex_to_file</code>\n"
+            "<code>{prefix}ss convert string_to_hex</code>\n"
+            "<code>{prefix}ss convert string_to_file</code>\n"
+            "<code>{prefix}ss convert file_to_string</code>\n"
+            "<code>{prefix}ss convert file_to_hex</code>\n"
+            "<code>{prefix}ss convert dc [id]</code></blockquote>\n"
             "<b>Test:</b>\n"
-            "<blockquote><code>{prefix}session test</code>\n"
-            "<code>{prefix}session test dc [id]</code>\n\n"
-            "<code>{prefix}session terminate</code></blockquote>"
+            "<blockquote><code>{prefix}ss test</code>\n"
+            "<code>{prefix}ss test dc [id]</code>\n\n"
+            "<code>{prefix}ss terminate</code></blockquote>"
         ),
         "create_status": (
             "<b>{status_text}</b>\n"
             "{line}\n"
             "<blockquote>"
             "Output: {output_type}\n"
-            "API ID: {api_id_st}\n"
-            "API HASH: {api_hash_st}\n"
+            "API ID: <code>{api_id_st}</code>\n"
+            "API HASH: <code>{api_hash_st}</code>\n"
             "Phone: {phone_st}\n"
             "Code: {code_st}\n"
             "Password: {pass_st}"
@@ -142,8 +142,13 @@ class Session(loader.Module):
             "</blockquote>\n"
             "{line}"
         ),
-        "file_caption": "<b>String → File</b>",
-        "err_running": "<b>Error:</b> Process running. Use <code>{prefix}session terminate</code>",
+        "caption_create_file": "<b>New Session → File</b>",
+        "caption_create_string": "<b>New Session → File</b>",
+        "caption_create_hex": "<b>New Session → File</b>",
+        "caption_string_to_file": "<b>String → File</b>",
+        "caption_hex_to_file": "<b>HEX → File</b>",
+        "caption_generic": "<b>Session File</b>",
+        "err_running": "<b>Error:</b> Process running. Use <code>{prefix}ss terminate</code>",
         "err_no_process": "<b>Error:</b> No active process.",
         "err_wrong_step": "<b>Error:</b> Wrong step. Current: <b>{step}</b>",
         "err_no_file": "<b>Error:</b> Reply to .session file.",
@@ -172,30 +177,30 @@ class Session(loader.Module):
         "usage": (
             "<b>Session Manager</b>\n"
             "<b>Создание:</b>\n"
-            "<blockquote><code>{prefix}session create string</code>\n"
-            "<code>{prefix}session create file</code>\n"
-            "<code>{prefix}session create hex</code>\n"
-            "<code>{prefix}session phone/code/password</code></blockquote>\n"
+            "<blockquote><code>{prefix}ss create string</code>\n"
+            "<code>{prefix}ss create file</code>\n"
+            "<code>{prefix}ss create hex</code>\n"
+            "<code>{prefix}ss phone/code/password</code></blockquote>\n"
             "<b>Конвертация:</b>\n"
-            "<blockquote><code>{prefix}session convert hex_to_string</code>\n"
-            "<code>{prefix}session convert hex_to_file</code>\n"
-            "<code>{prefix}session convert string_to_hex</code>\n"
-            "<code>{prefix}session convert string_to_file</code>\n"
-            "<code>{prefix}session convert file_to_string</code>\n"
-            "<code>{prefix}session convert file_to_hex</code>\n"
-            "<code>{prefix}session convert dc [id]</code></blockquote>\n"
+            "<blockquote><code>{prefix}ss convert hex_to_string</code>\n"
+            "<code>{prefix}ss convert hex_to_file</code>\n"
+            "<code>{prefix}ss convert string_to_hex</code>\n"
+            "<code>{prefix}ss convert string_to_file</code>\n"
+            "<code>{prefix}ss convert file_to_string</code>\n"
+            "<code>{prefix}ss convert file_to_hex</code>\n"
+            "<code>{prefix}ss convert dc [id]</code></blockquote>\n"
             "<b>Тест:</b>\n"
-            "<blockquote><code>{prefix}session test</code>\n"
-            "<code>{prefix}session test dc [id]</code>\n\n"
-            "<code>{prefix}session terminate</code></blockquote>"
+            "<blockquote><code>{prefix}ss test</code>\n"
+            "<code>{prefix}ss test dc [id]</code>\n\n"
+            "<code>{prefix}ss terminate</code></blockquote>"
         ),
         "create_status": (
             "<b>{status_text}</b>\n"
             "{line}\n"
             "<blockquote>"
             "Формат: {output_type}\n"
-            "API ID: {api_id_st}\n"
-            "API HASH: {api_hash_st}\n"
+            "API ID: <code>{api_id_st}</code>\n"
+            "API HASH: <code>{api_hash_st}</code>\n"
             "Телефон: {phone_st}\n"
             "Код: {code_st}\n"
             "Пароль: {pass_st}"
@@ -261,8 +266,13 @@ class Session(loader.Module):
             "</blockquote>\n"
             "{line}"
         ),
-        "file_caption": "<b>String → File</b>",
-        "err_running": "<b>Ошибка:</b> Процесс запущен. Используй <code>{prefix}session terminate</code>",
+        "caption_create_file": "<b>Новая сессия → Файл</b>",
+        "caption_create_string": "<b>Новая сессия → Файл</b>",
+        "caption_create_hex": "<b>Новая сессия → Файл</b>",
+        "caption_string_to_file": "<b>String → Файл</b>",
+        "caption_hex_to_file": "<b>HEX → Файл</b>",
+        "caption_generic": "<b>Файл сессии</b>",
+        "err_running": "<b>Ошибка:</b> Процесс запущен. Используй <code>{prefix}ss terminate</code>",
         "err_no_process": "<b>Ошибка:</b> Нет активного процесса.",
         "err_wrong_step": "<b>Ошибка:</b> Неверный шаг. Текущий: <b>{step}</b>",
         "err_no_file": "<b>Ошибка:</b> Ответь на .session файл.",
@@ -336,6 +346,27 @@ class Session(loader.Module):
                 shutil.rmtree(self._temp_dir)
             except:
                 pass
+
+    def _get_device_model(self, output_type=None):
+        """Возвращает device_model в зависимости от типа сессии"""
+        if output_type == "string":
+            return "StringSession"
+        elif output_type == "file":
+            return "FileSession"
+        elif output_type == "hex":
+            return "HEXSession"
+        return "SessionManager"
+
+    def _get_api_id_display(self):
+        """Возвращает реальный API ID"""
+        return str(self.config["API_ID"])
+
+    def _get_api_hash_display(self):
+        """Возвращает первые 3 символа API HASH + ..."""
+        api_hash = str(self.config["API_HASH"])
+        if len(api_hash) >= 3:
+            return f"{api_hash[:3]}..."
+        return api_hash
 
     def _get_topic_id(self, message: Message):
         reply_to = getattr(message, 'reply_to', None)
@@ -530,7 +561,7 @@ class Session(loader.Module):
             await self._client.send_file(
                 chat_id,
                 memory_file,
-                caption=caption or self.strings["file_caption"],
+                caption=caption or self.strings["caption_generic"],
                 force_document=True,
                 attributes=attributes,
                 parse_mode="html",
@@ -577,7 +608,8 @@ class Session(loader.Module):
         msg_text = self.strings["create_status"].format(
             status_text=status_text, line=self.strings["line"],
             output_type=self._output_type.upper() if self._output_type else "STRING",
-            api_id_st=self.strings["ok"], api_hash_st=self.strings["ok"],
+            api_id_st=self._get_api_id_display(),
+            api_hash_st=self._get_api_hash_display(),
             phone_st=phone_st, code_st=code_st, pass_st=pass_st,
             result_st=result_st, exec_time=self._get_exec_time()
         )
@@ -623,7 +655,7 @@ class Session(loader.Module):
         ru_doc="Менеджер сессий",
         en_doc="Session manager",
     )
-    async def session(self, message: Message):
+    async def ss(self, message: Message):
         """Session manager"""
         args = utils.get_args_raw(message).split()
         prefix = self.get_prefix()
@@ -666,10 +698,14 @@ class Session(loader.Module):
         self._topic_id = self._get_topic_id(message)
         self._origin_message = message
         try:
+            device_model = self._get_device_model(output_type)
             self._session_client = TelegramClient(
                 StringSession(),
                 int(self.config["API_ID"]),
-                self.config["API_HASH"]
+                self.config["API_HASH"],
+                device_model=device_model,
+                system_version="By @FireJester",
+                app_version=f"v{'.'.join(map(str, __version__))}",
             )
             await self._session_client.connect()
         except Exception as e:
@@ -730,6 +766,16 @@ class Session(loader.Module):
         except Exception as e:
             await utils.answer(message, f"<b>Error:</b> {str(e)}")
 
+    def _get_create_file_caption(self):
+        """Возвращает правильную подпись для файла в зависимости от output_type при создании"""
+        if self._output_type == "file":
+            return self.strings["caption_create_file"]
+        elif self._output_type == "string":
+            return self.strings["caption_create_string"]
+        elif self._output_type == "hex":
+            return self.strings["caption_create_hex"]
+        return self.strings["caption_generic"]
+
     async def _finalize_create(self):
         try:
             string_session = self._session_client.session.save()
@@ -756,10 +802,12 @@ class Session(loader.Module):
                 self._data['result_display'] = self.strings["done"]
                 await self._update_status()
                 if parsed:
+                    caption = self._get_create_file_caption()
                     success = await self._send_session_file(
                         self._chat_id,
                         parsed['dc_id'],
                         parsed['auth_key'],
+                        caption=caption,
                         topic_id=self._topic_id
                     )
                     if not success:
@@ -895,7 +943,7 @@ class Session(loader.Module):
             message.chat_id,
             parsed['dc_id'],
             parsed['auth_key'],
-            caption="<b>String → File</b>",
+            caption=self.strings["caption_string_to_file"],
             topic_id=topic_id
         )
         if not success:
@@ -987,6 +1035,7 @@ class Session(loader.Module):
                     self._chat_id,
                     dc_id,
                     auth_key,
+                    caption=self.strings["caption_hex_to_file"],
                     topic_id=self._topic_id
                 )
                 if not success:
@@ -1017,13 +1066,39 @@ class Session(loader.Module):
             prefix = self.get_prefix()
             return await utils.answer(message, self.strings["err_running"].format(prefix=prefix))
         reply = await message.get_reply_message()
+
+        # Сначала проверяем файл в реплае
+        if reply and reply.file:
+            file_name = getattr(reply.file, 'name', None) or ""
+            if file_name.endswith('.session'):
+                file_path = os.path.join(self._temp_dir, "test.session")
+                try:
+                    await reply.download_media(file_path)
+                    data = await self._read_session_file(file_path)
+                    if data:
+                        string_session = self._build_string_session(data['dc_id'], data['auth_key'])
+                        if string_session:
+                            await self._test_string_session(message, string_session)
+                            return
+                    await utils.answer(message, self.strings["err_invalid_file"])
+                    return
+                except Exception as e:
+                    await utils.answer(message, f"<b>Error:</b> {str(e)}")
+                    return
+                finally:
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+
+        # Затем проверяем текст
         input_text = " ".join(args[1:]) if len(args) > 1 else ""
-        if reply:
+        if not input_text and reply:
             input_text = reply.text or ""
+
         string_session = self._find_string_session(input_text)
         if string_session:
             await self._test_string_session(message, string_session)
             return
+
         hex_key = self._find_hex_key(input_text)
         if hex_key:
             self._active = True
@@ -1036,21 +1111,7 @@ class Session(loader.Module):
             self._status_msg = await utils.answer(message, self.strings["checking"])
             self._loop_task = asyncio.create_task(self._update_loop())
             return
-        if reply and reply.file and reply.file.name and reply.file.name.endswith('.session'):
-            file_path = os.path.join(self._temp_dir, "test.session")
-            try:
-                await reply.download_media(file_path)
-                data = await self._read_session_file(file_path)
-                if data:
-                    string_session = self._build_string_session(data['dc_id'], data['auth_key'])
-                    if string_session:
-                        await self._test_string_session(message, string_session)
-                        return
-            except:
-                pass
-            finally:
-                if os.path.exists(file_path):
-                    os.remove(file_path)
+
         await utils.answer(message, self.strings["err_no_string"])
 
     async def _test_string_session(self, message: Message, string_session):
@@ -1060,7 +1121,10 @@ class Session(loader.Module):
             test_client = TelegramClient(
                 StringSession(string_session),
                 int(self.config["API_ID"]),
-                self.config["API_HASH"]
+                self.config["API_HASH"],
+                device_model="SessionTest",
+                system_version="By @FireJester",
+                app_version=f"v{'.'.join(map(str, __version__))}",
             )
             await asyncio.wait_for(test_client.connect(), timeout=15)
             me = await asyncio.wait_for(test_client.get_me(), timeout=10)
@@ -1154,7 +1218,10 @@ class Session(loader.Module):
                 test_client = TelegramClient(
                     StringSession(string_session),
                     int(self.config["API_ID"]),
-                    self.config["API_HASH"]
+                    self.config["API_HASH"],
+                    device_model="SessionTest",
+                    system_version="By @FireJester",
+                    app_version=f"v{'.'.join(map(str, __version__))}",
                 )
                 await asyncio.wait_for(test_client.connect(), timeout=15)
                 me = await asyncio.wait_for(test_client.get_me(), timeout=10)
