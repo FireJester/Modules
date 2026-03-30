@@ -12,7 +12,8 @@ Note
 QRAuthDumper 
 RaidProtection
 Session 
-StarsX    
+StarsX 
+Statistics
 Stories 
 Test 
 TONScanner
