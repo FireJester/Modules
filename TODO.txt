@@ -3,6 +3,5 @@ TGWatcher
 AIBot
 MTProxy
 Dumper
-Uploader
 Minecraft
 Token
