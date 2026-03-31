@@ -1,4 +1,4 @@
-__version__ = (1, 4, 0)
+__version__ = (1, 3, 4)
 # meta developer: FireJester.t.me
 
 import os
@@ -27,6 +27,9 @@ from telethon.tl.types import (
     UpdateBotPrecheckoutQuery,
     InputStickerSetID,
     DocumentAttributeFilename,
+    DocumentAttributeCustomEmoji,
+    DocumentAttributeImageSize,
+    DocumentAttributeSticker,
 )
 from telethon.tl.functions.payments import (
     GetStarsStatusRequest,
@@ -102,6 +105,13 @@ def get_username(entity):
     return None
 
 
+def _is_custom_emoji_doc(doc):
+    for attr in getattr(doc, 'attributes', []):
+        if isinstance(attr, DocumentAttributeCustomEmoji):
+            return True
+    return False
+
+
 def generate_star_invoice(
     stars_amount, title, description, payload, start_parameter,
     photo_url=None, photo_width=512, photo_height=512,
@@ -145,9 +155,9 @@ class StarsX(loader.Module):
             "<code>{prefix}show get [username/ID]</code> - saved gifts of a user\n"
             "<code>{prefix}show get sticker [username/ID]</code> - saved gifts as stickers\n"
             "<code>{prefix}show collections</code> - list NFT collections\n"
-            "<code>{prefix}show all [collection name/NFT link]</code> - ordinary model stickers\n"
-            "<code>{prefix}show all ord [collection name/NFT link]</code> - ordinary model stickers\n"
-            "<code>{prefix}show all craft [collection name/NFT link]</code> - crafted model stickers\n"
+            "<code>{prefix}show all [collection/NFT link]</code> - ordinary model stickers\n"
+            "<code>{prefix}show all ord [collection/NFT link]</code> - ordinary model stickers\n"
+            "<code>{prefix}show all craft [collection/NFT link]</code> - crafted model stickers\n"
             "<code>{prefix}show stop</code> - stop sending stickers"
         ),
         "show_checking": "Searching gift info...",
@@ -360,9 +370,9 @@ class StarsX(loader.Module):
             "<code>{prefix}show get [username/ID]</code> - сохранённые подарки пользователя\n"
             "<code>{prefix}show get sticker [username/ID]</code> - сохранённые подарки как стикеры\n"
             "<code>{prefix}show collections</code> - список NFT коллекций\n"
-            "<code>{prefix}show all [название коллекции/NFT ссылка]</code> - обычные стикеры моделей\n"
-            "<code>{prefix}show all ord [название коллекции/NFT ссылка]</code> - обычные стикеры моделей\n"
-            "<code>{prefix}show all craft [название коллекции/NFT ссылка]</code> - крафтовые стикеры моделей\n"
+            "<code>{prefix}show all [коллекция/NFT ссылка]</code> - обычные стикеры моделей\n"
+            "<code>{prefix}show all ord [коллекция/NFT ссылка]</code> - обычные стикеры моделей\n"
+            "<code>{prefix}show all craft [коллекция/NFT ссылка]</code> - крафтовые стикеры моделей\n"
             "<code>{prefix}show stop</code> - остановить отправку стикеров"
         ),
         "show_checking": "Поиск информации о подарке...",
@@ -1330,24 +1340,93 @@ class StarsX(loader.Module):
         except Exception:
             pass
 
+    async def _send_sticker_doc(self, chat_id, doc, reply_id=None):
+        """Send a single sticker document properly.
+
+        Custom emoji docs cannot be sent as stickers in regular chats,
+        so we re-upload them with sticker attributes instead.
+        """
+        is_ce = _is_custom_emoji_doc(doc)
+
+        if not is_ce:
+            # Normal sticker - just download and send
+            try:
+                data = await self._client.download_media(doc, bytes)
+                if not data:
+                    return False
+                f = io.BytesIO(data)
+                f.name = "sticker.tgs"
+                await self._client.send_file(chat_id, f, reply_to=reply_id)
+                return True
+            except Exception:
+                return False
+
+        # Custom emoji - need to re-upload with proper sticker attributes
+        try:
+            data = await self._client.download_media(doc, bytes)
+            if not data:
+                return False
+            f = io.BytesIO(data)
+            f.name = "sticker.tgs"
+
+            # Build sticker attributes: keep ImageSize, replace CustomEmoji with Sticker
+            new_attrs = []
+            has_size = False
+            alt_emoji = ""
+            stickerset_ref = None
+
+            for attr in getattr(doc, 'attributes', []):
+                if isinstance(attr, DocumentAttributeImageSize):
+                    new_attrs.append(attr)
+                    has_size = True
+                elif isinstance(attr, DocumentAttributeCustomEmoji):
+                    alt_emoji = getattr(attr, 'alt', '') or ''
+                    stickerset_ref = getattr(attr, 'stickerset', None)
+                # Skip Filename - not needed for stickers
+
+            if not has_size:
+                new_attrs.append(DocumentAttributeImageSize(w=512, h=512))
+
+            # Add proper sticker attribute
+            new_attrs.append(DocumentAttributeSticker(
+                alt=alt_emoji or '',
+                stickerset=stickerset_ref or InputStickerSetID(id=0, access_hash=0),
+                mask=None,
+                mask_coords=None,
+            ))
+
+            await self._client.send_file(
+                chat_id, f,
+                reply_to=reply_id,
+                attributes=new_attrs,
+            )
+            return True
+        except Exception:
+            # Fallback: send as document
+            try:
+                data = await self._client.download_media(doc, bytes)
+                if data:
+                    f = io.BytesIO(data)
+                    f.name = "sticker.tgs"
+                    await self._client.send_file(
+                        chat_id, f,
+                        reply_to=reply_id,
+                        force_document=True,
+                    )
+                    return True
+            except Exception:
+                pass
+            return False
+
     async def _send_sticker_docs(self, message, docs, reply_id):
+        """Send multiple sticker documents."""
         sent = 0
         for doc in docs:
             if self._show_stop:
                 return sent, True
-            try:
-                data = await self._client.download_media(doc, bytes)
-                if not data:
-                    continue
-                f = io.BytesIO(data)
-                f.name = "sticker.tgs"
-                await self._client.send_file(
-                    message.chat_id, f,
-                    reply_to=reply_id,
-                )
+            ok = await self._send_sticker_doc(message.chat_id, doc, reply_id)
+            if ok:
                 sent += 1
-            except Exception:
-                pass
             if sent % 10 == 0 and sent > 0:
                 await asyncio.sleep(1)
             else:
@@ -1446,15 +1525,7 @@ class StarsX(loader.Module):
                 backdrop_name = getattr(attr, 'name', '?')
 
         if model_doc:
-            try:
-                data = await self._client.download_media(model_doc, bytes)
-                f = io.BytesIO(data)
-                f.name = "sticker.tgs"
-                await self._client.send_file(
-                    message.chat_id, f, reply_to=reply_id,
-                )
-            except Exception:
-                pass
+            await self._send_sticker_doc(message.chat_id, model_doc, reply_id)
 
         info = self.strings["show_nft_gift_info"].format(
             title=getattr(gift, 'title', '?'), slug=slug,
@@ -1483,14 +1554,11 @@ class StarsX(loader.Module):
         if gift_type == "index":
             selected = gifts[gift_val]
             try:
-                data = await self._client.download_media(selected.sticker, bytes)
-                f = io.BytesIO(data)
-                f.name = "sticker.tgs"
-                await self._client.send_file(
-                    message.chat_id, f,
-                    reply_to=reply_id,
-                )
-                await self._try_delete(status_msg)
+                ok = await self._send_sticker_doc(message.chat_id, selected.sticker, reply_id)
+                if ok:
+                    await self._try_delete(status_msg)
+                else:
+                    await utils.answer(status_msg, self.strings["show_download_error"].format(error="send failed"))
             except Exception as e:
                 await utils.answer(status_msg, self.strings["show_download_error"].format(error=str(e)))
             return
@@ -1498,14 +1566,11 @@ class StarsX(loader.Module):
         for i, g in enumerate(gifts):
             if g.id == gift_val:
                 try:
-                    data = await self._client.download_media(g.sticker, bytes)
-                    f = io.BytesIO(data)
-                    f.name = "sticker.tgs"
-                    await self._client.send_file(
-                        message.chat_id, f,
-                        reply_to=reply_id,
-                    )
-                    await self._try_delete(status_msg)
+                    ok = await self._send_sticker_doc(message.chat_id, g.sticker, reply_id)
+                    if ok:
+                        await self._try_delete(status_msg)
+                    else:
+                        await utils.answer(status_msg, self.strings["show_download_error"].format(error="send failed"))
                 except Exception as e:
                     await utils.answer(status_msg, self.strings["show_download_error"].format(error=str(e)))
                 return
@@ -1743,14 +1808,8 @@ class StarsX(loader.Module):
                             if type(attr).__name__ == "StarGiftAttributeModel":
                                 doc = getattr(attr, 'document', None)
                                 if doc:
-                                    data = await self._client.download_media(doc, bytes)
-                                    if data:
-                                        f = io.BytesIO(data)
-                                        f.name = "sticker.tgs"
-                                        await self._client.send_file(
-                                            message.chat_id, f,
-                                            reply_to=reply_id,
-                                        )
+                                    ok = await self._send_sticker_doc(message.chat_id, doc, reply_id)
+                                    if ok:
                                         sent += 1
                                 break
                     except Exception:
@@ -1762,18 +1821,9 @@ class StarsX(loader.Module):
                 sent_ids.add(gid)
                 sticker = getattr(gift, 'sticker', None)
                 if sticker:
-                    try:
-                        data = await self._client.download_media(sticker, bytes)
-                        if data:
-                            f = io.BytesIO(data)
-                            f.name = "sticker.tgs"
-                            await self._client.send_file(
-                                message.chat_id, f,
-                                reply_to=reply_id,
-                            )
-                            sent += 1
-                    except Exception:
-                        pass
+                    ok = await self._send_sticker_doc(message.chat_id, sticker, reply_id)
+                    if ok:
+                        sent += 1
 
             if sent % 5 == 0 and sent > 0:
                 await asyncio.sleep(1)
@@ -2501,10 +2551,7 @@ class StarsX(loader.Module):
         try:
             for g in gifts:
                 if g.id == gift_id:
-                    data = await self._client.download_media(g.sticker, bytes)
-                    f = io.BytesIO(data)
-                    f.name = "sticker.tgs"
-                    await self._client.send_file(message.chat_id, f, reply_to=reply_id)
+                    await self._send_sticker_doc(message.chat_id, g.sticker, reply_id)
                     break
         except Exception:
             pass
