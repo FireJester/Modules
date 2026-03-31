@@ -6,6 +6,7 @@ Grabber
 Info  
 Logger 
 Manager
+Market
 MTProxy
 MusicX    
 NewYear 
