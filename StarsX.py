@@ -1,4 +1,4 @@
-__version__ = (1, 3, 2)
+__version__ = (1, 4, 0)
 # meta developer: FireJester.t.me
 
 import os
@@ -37,6 +37,7 @@ from telethon.tl.functions.payments import (
     GetUniqueStarGiftRequest,
     ExportInvoiceRequest,
     GetStarGiftUpgradePreviewRequest,
+    GetResaleStarGiftsRequest,
 )
 from telethon.tl.functions.messages import (
     SetBotPrecheckoutResultsRequest,
@@ -144,19 +145,20 @@ class StarsX(loader.Module):
             "<code>{prefix}show get [username/ID]</code> - saved gifts of a user\n"
             "<code>{prefix}show get sticker [username/ID]</code> - saved gifts as stickers\n"
             "<code>{prefix}show collections</code> - list NFT collections\n"
-            "<code>{prefix}show all [collection name/NFT link]</code> - all models of collection\n"
+            "<code>{prefix}show all [collection name/NFT link]</code> - ordinary model stickers\n"
+            "<code>{prefix}show all ord [collection name/NFT link]</code> - ordinary model stickers\n"
+            "<code>{prefix}show all craft [collection name/NFT link]</code> - crafted model stickers\n"
             "<code>{prefix}show stop</code> - stop sending stickers"
         ),
         "show_checking": "Searching gift info...",
         "show_invalid_arg": "Invalid argument. Use index (0-{max}) or 19-digit ID.",
         "show_not_found": "Gift not found.",
         "show_no_gifts": "No gifts available.",
-        "show_sticker_sent": "Sticker sent.",
         "show_download_error": "Sticker download error: {error}",
         "show_list_header": "<b>Available gifts ({count}):</b> ({source})",
         "show_list_chunk": "<b>Part {current}/{total}</b>\n\n",
-        "show_list_item": "Index: <code>{index}</code>, ID: <code>{id}</code>, Price: {stars} ☆",
-        "show_list_bot_item": "#{index} - ID: <code>{id}</code>, {stars} ☆{limited}",
+        "show_list_item": "Index: <code>{index}</code>, ID: <code>{id}</code>, Price: {stars}",
+        "show_list_bot_item": "#{index} - ID: <code>{id}</code>, {stars}{limited}",
         "show_list_empty": "No gifts available.",
         "show_list_loading": "Loading gifts list...",
         "show_get_loading": "Loading user gifts...",
@@ -170,7 +172,7 @@ class StarsX(loader.Module):
         "show_hidden_gift_info": (
             "<b>Hidden gift</b> (not in public catalog)\n"
             "ID: <code>{id}</code>\n"
-            "Price: {stars} ☆"
+            "Price: {stars}"
         ),
         "show_nft_gift_info": (
             "<b>NFT Gift:</b> {title}\n"
@@ -183,18 +185,25 @@ class StarsX(loader.Module):
         "show_nft_not_found": "NFT gift not found or invalid slug.",
         "show_collections_loading": "Loading NFT collections...",
         "show_collections_header": "<b>NFT Collections ({count}):</b>",
-        "show_collections_item": "<code>{title}</code> - {stars} ☆ + {upgrade} ☆",
+        "show_collections_item": "<code>{title}</code> - {stars} + {upgrade} upgrade",
         "show_collections_empty": "No NFT collections found.",
         "show_all_loading": "Loading collection {name}...",
+        "show_all_discovering_crafted": "Discovering crafted sticker sets for {name}...",
         "show_all_info": (
-            "<b>{title}</b>\n"
-            "Total models: {count}\n"
-            "Price: {stars} ☆ + {upgrade} ☆\n\n"
-            "Sending all {count} stickers..."
+            "<b>{title}</b> [{mode}]\n"
+            "Stickers: {count}\n\n"
+            "Sending..."
         ),
-        "show_all_done": "<b>{title}</b> - sent {sent}/{total} model stickers",
+        "show_all_info_crafted_multi": (
+            "<b>{title}</b> [crafted]\n"
+            "Sets: {sets_count}\n"
+            "Total stickers: {count}\n\n"
+            "Sending..."
+        ),
+        "show_all_done": "<b>{title}</b> [{mode}] - sent {sent}/{total}",
         "show_all_not_found": "Collection <code>{name}</code> not found. Use <code>{prefix}show collections</code>",
         "show_all_no_set": "Could not find sticker set for this collection.",
+        "show_all_no_crafted": "No crafted sticker sets found for <b>{name}</b>.",
         "show_all_stopped": "Stopped. Sent {sent}/{total}.",
         "show_stop_done": "Stopped.",
         "show_stop_nothing": "Nothing to stop.",
@@ -209,7 +218,7 @@ class StarsX(loader.Module):
             "<code>{prefix}stars invoice text [1/2] [text]</code> - set invoice text"
         ),
         "stars_balance_loading": "Getting balance...",
-        "stars_balance_result": "<b>Balance [{source}]:</b> {amount} ☆",
+        "stars_balance_result": "<b>Balance [{source}]:</b> {amount}",
         "stars_balance_error": "Balance error: {error}",
         "stars_invoice_res_set": "<b>Resolution set:</b> {width}x{height}",
         "stars_invoice_res_invalid": "Invalid format. Use: {prefix}stars invoice resolution 512x512",
@@ -255,7 +264,7 @@ class StarsX(loader.Module):
         ),
         "gift_account_not_found": "Account [{num}] not found.",
         "gift_premium_only_bot": "Premium gifts can only be sent from bots.",
-        "gift_premium_sending": "Sending Premium {months}m ({stars} ☆) {current}/{total}...",
+        "gift_premium_sending": "Sending Premium {months}m ({stars}) {current}/{total}...",
 
         "starsx_help": (
             "<b>StarsX Account Management</b>\n\n"
@@ -308,7 +317,7 @@ class StarsX(loader.Module):
             "<code>{prefix}link for [all/ID/username] [gift] [count] [comment]</code> - gift link\n"
             "<code>{prefix}link for [N] [amount]</code> - invoice link for bot N"
         ),
-        "link_invoice_created": "<b>Invoice link created!</b>\n\nBot: [{num}]\nAmount: {amount} ☆",
+        "link_invoice_created": "<b>Invoice link created!</b>\n\nBot: [{num}]\nAmount: {amount}",
         "link_not_enough_stars": "Not enough stars! Need: {need}, Have: {have}",
         "link_invalid_gift": "Invalid gift!",
         "link_not_a_bot": "Account [{num}] is not a bot!",
@@ -325,9 +334,9 @@ class StarsX(loader.Module):
         "bot_gift_expired": "This gift link has expired!",
         "bot_refund_success": "<b>Refund complete!</b>\nUser: <code>{user_id}</code>\nCharge: <code>{charge_id}</code>",
         "bot_refund_error": "Refund error: {error}",
-        "bot_invoice_sent": "Invoice for {amount} ☆ sent!",
+        "bot_invoice_sent": "Invoice for {amount} sent!",
 
-        "inline_title": "Payment {stars} ☆",
+        "inline_title": "Payment {stars}",
         "inline_description": "Click to create invoice",
         "invoice_title_default": "Purchase {stars} Stars",
         "invoice_desc_default": "Payment for {stars} Telegram Stars",
@@ -351,19 +360,20 @@ class StarsX(loader.Module):
             "<code>{prefix}show get [username/ID]</code> - сохранённые подарки пользователя\n"
             "<code>{prefix}show get sticker [username/ID]</code> - сохранённые подарки как стикеры\n"
             "<code>{prefix}show collections</code> - список NFT коллекций\n"
-            "<code>{prefix}show all [название коллекции/NFT ссылка]</code> - все модели коллекции\n"
+            "<code>{prefix}show all [название коллекции/NFT ссылка]</code> - обычные стикеры моделей\n"
+            "<code>{prefix}show all ord [название коллекции/NFT ссылка]</code> - обычные стикеры моделей\n"
+            "<code>{prefix}show all craft [название коллекции/NFT ссылка]</code> - крафтовые стикеры моделей\n"
             "<code>{prefix}show stop</code> - остановить отправку стикеров"
         ),
         "show_checking": "Поиск информации о подарке...",
         "show_invalid_arg": "Неверный аргумент. Используйте индекс (0-{max}) или 19-значный ID.",
         "show_not_found": "Подарок не найден.",
         "show_no_gifts": "Нет доступных подарков.",
-        "show_sticker_sent": "Стикер отправлен.",
         "show_download_error": "Ошибка загрузки стикера: {error}",
         "show_list_header": "<b>Доступные подарки ({count}):</b> ({source})",
         "show_list_chunk": "<b>Часть {current}/{total}</b>\n\n",
-        "show_list_item": "Индекс: <code>{index}</code>, ID: <code>{id}</code>, Цена: {stars} ☆",
-        "show_list_bot_item": "#{index} - ID: <code>{id}</code>, {stars} ☆{limited}",
+        "show_list_item": "Индекс: <code>{index}</code>, ID: <code>{id}</code>, Цена: {stars}",
+        "show_list_bot_item": "#{index} - ID: <code>{id}</code>, {stars}{limited}",
         "show_list_empty": "Нет доступных подарков.",
         "show_list_loading": "Загрузка списка подарков...",
         "show_get_loading": "Загрузка подарков пользователя...",
@@ -377,7 +387,7 @@ class StarsX(loader.Module):
         "show_hidden_gift_info": (
             "<b>Скрытый подарок</b> (не в публичном каталоге)\n"
             "ID: <code>{id}</code>\n"
-            "Цена: {stars} ☆"
+            "Цена: {stars}"
         ),
         "show_nft_gift_info": (
             "<b>NFT Подарок:</b> {title}\n"
@@ -390,18 +400,25 @@ class StarsX(loader.Module):
         "show_nft_not_found": "NFT подарок не найден или неверный slug.",
         "show_collections_loading": "Загрузка NFT коллекций...",
         "show_collections_header": "<b>NFT Коллекции ({count}):</b>",
-        "show_collections_item": "<code>{title}</code> - {stars} ☆ + {upgrade} ☆",
+        "show_collections_item": "<code>{title}</code> - {stars} + {upgrade} апгрейд",
         "show_collections_empty": "NFT коллекции не найдены.",
         "show_all_loading": "Загрузка коллекции {name}...",
+        "show_all_discovering_crafted": "Поиск крафтовых стикерсетов для {name}...",
         "show_all_info": (
-            "<b>{title}</b>\n"
-            "Всего моделей: {count}\n"
-            "Цена: {stars} ☆ + {upgrade} ☆\n\n"
-            "Отправка всех {count} стикеров..."
+            "<b>{title}</b> [{mode}]\n"
+            "Стикеров: {count}\n\n"
+            "Отправка..."
         ),
-        "show_all_done": "<b>{title}</b> - отправлено {sent}/{total} стикеров моделей",
+        "show_all_info_crafted_multi": (
+            "<b>{title}</b> [crafted]\n"
+            "Сетов: {sets_count}\n"
+            "Всего стикеров: {count}\n\n"
+            "Отправка..."
+        ),
+        "show_all_done": "<b>{title}</b> [{mode}] - отправлено {sent}/{total}",
         "show_all_not_found": "Коллекция <code>{name}</code> не найдена. Используйте <code>{prefix}show collections</code>",
         "show_all_no_set": "Не удалось найти набор стикеров для этой коллекции.",
+        "show_all_no_crafted": "Крафтовые стикерсеты для <b>{name}</b> не найдены.",
         "show_all_stopped": "Остановлено. Отправлено {sent}/{total}.",
         "show_stop_done": "Остановлено.",
         "show_stop_nothing": "Нечего останавливать.",
@@ -416,7 +433,7 @@ class StarsX(loader.Module):
             "<code>{prefix}stars invoice text [1/2] [текст]</code> - установить текст инвойса"
         ),
         "stars_balance_loading": "Получение баланса...",
-        "stars_balance_result": "<b>Баланс [{source}]:</b> {amount} ☆",
+        "stars_balance_result": "<b>Баланс [{source}]:</b> {amount}",
         "stars_balance_error": "Ошибка баланса: {error}",
         "stars_invoice_res_set": "<b>Разрешение установлено:</b> {width}x{height}",
         "stars_invoice_res_invalid": "Неверный формат. Используйте: {prefix}stars invoice resolution 512x512",
@@ -462,7 +479,7 @@ class StarsX(loader.Module):
         ),
         "gift_account_not_found": "Аккаунт [{num}] не найден.",
         "gift_premium_only_bot": "Премиум подарки можно отправлять только через ботов.",
-        "gift_premium_sending": "Отправка Premium {months}м ({stars} ☆) {current}/{total}...",
+        "gift_premium_sending": "Отправка Premium {months}м ({stars}) {current}/{total}...",
 
         "starsx_help": (
             "<b>Управление аккаунтами StarsX</b>\n\n"
@@ -515,7 +532,7 @@ class StarsX(loader.Module):
             "<code>{prefix}link for [all/ID/username] [подарок] [кол-во] [комментарий]</code> - ссылка на подарок\n"
             "<code>{prefix}link for [N] [сумма]</code> - ссылка на инвойс для бота N"
         ),
-        "link_invoice_created": "<b>Ссылка на инвойс создана!</b>\n\nБот: [{num}]\nСумма: {amount} ☆",
+        "link_invoice_created": "<b>Ссылка на инвойс создана!</b>\n\nБот: [{num}]\nСумма: {amount}",
         "link_not_enough_stars": "Недостаточно звёзд! Нужно: {need}, Есть: {have}",
         "link_invalid_gift": "Неверный подарок!",
         "link_not_a_bot": "Аккаунт [{num}] не является ботом!",
@@ -532,9 +549,9 @@ class StarsX(loader.Module):
         "bot_gift_expired": "Срок действия этой ссылки истёк!",
         "bot_refund_success": "<b>Возврат выполнен!</b>\nПользователь: <code>{user_id}</code>\nCharge: <code>{charge_id}</code>",
         "bot_refund_error": "Ошибка возврата: {error}",
-        "bot_invoice_sent": "Инвойс на {amount} ☆ отправлен!",
+        "bot_invoice_sent": "Инвойс на {amount} отправлен!",
 
-        "inline_title": "Оплата {stars} ☆",
+        "inline_title": "Оплата {stars}",
         "inline_description": "Нажмите для создания инвойса",
         "invoice_title_default": "Покупка {stars} Stars",
         "invoice_desc_default": "Оплата {stars} Telegram Stars",
@@ -897,6 +914,157 @@ class StarsX(loader.Module):
                         return None, None
         return None, None
 
+    async def _get_default_set_id(self, gift_id):
+        try:
+            preview = await self._client(GetStarGiftUpgradePreviewRequest(gift_id=gift_id))
+        except Exception:
+            return None, None
+        for attr in getattr(preview, 'sample_attributes', []):
+            if type(attr).__name__ != 'StarGiftAttributeModel':
+                continue
+            doc = getattr(attr, 'document', None)
+            if not doc:
+                continue
+            for da in getattr(doc, 'attributes', []):
+                ss = getattr(da, 'stickerset', None)
+                if ss and hasattr(ss, 'id'):
+                    return ss.id, ss.access_hash
+        return None, None
+
+    async def _fetch_sticker_set(self, ss_id, ss_ah):
+        try:
+            return await self._client(GetStickerSetRequest(
+                stickerset=InputStickerSetID(id=ss_id, access_hash=ss_ah),
+                hash=0,
+            ))
+        except Exception:
+            return None
+
+    async def _get_all_model_doc_ids(self, gift_id):
+        try:
+            resale = await self._client(GetResaleStarGiftsRequest(
+                gift_id=gift_id, offset="", limit=1,
+                sort_by_price=True, sort_by_num=False,
+                attributes_hash=0, attributes=None,
+            ))
+        except Exception:
+            return []
+        ids = []
+        for c in getattr(resale, 'counters', []):
+            a = getattr(c, 'attribute', None)
+            if a and type(a).__name__ == 'StarGiftAttributeIdModel':
+                d = getattr(a, 'document_id', None)
+                if d:
+                    ids.append(d)
+        return ids
+
+    async def _get_stickerset_from_slug(self, slug):
+        try:
+            r = await self._client(GetUniqueStarGiftRequest(slug=slug))
+            gift = r.gift if hasattr(r, 'gift') else r
+            for attr in getattr(gift, 'attributes', []):
+                if type(attr).__name__ != 'StarGiftAttributeModel':
+                    continue
+                doc = getattr(attr, 'document', None)
+                if not doc:
+                    continue
+                for da in getattr(doc, 'attributes', []):
+                    ss = getattr(da, 'stickerset', None)
+                    if ss and hasattr(ss, 'id'):
+                        return ss.id, ss.access_hash
+        except Exception:
+            pass
+        return None, None
+
+    async def _find_crafted_slug_filtered(self, gift_id, doc_id):
+        from telethon.tl.types import StarGiftAttributeIdModel
+        try:
+            resale = await self._client(GetResaleStarGiftsRequest(
+                gift_id=gift_id, offset="", limit=1,
+                sort_by_price=True, sort_by_num=False,
+                attributes_hash=0,
+                attributes=[StarGiftAttributeIdModel(document_id=doc_id)],
+            ))
+            gifts = getattr(resale, 'gifts', [])
+            if gifts:
+                return getattr(gifts[0], 'slug', None)
+        except Exception:
+            pass
+        return None
+
+    async def _find_crafted_slug_paginated(self, gift_id, target_doc_ids):
+        offset = ""
+        for _ in range(30):
+            try:
+                resale = await self._client(GetResaleStarGiftsRequest(
+                    gift_id=gift_id, offset=offset, limit=100,
+                    sort_by_price=True, sort_by_num=False,
+                    attributes_hash=0, attributes=None,
+                ))
+            except Exception:
+                break
+            for g in getattr(resale, 'gifts', []):
+                for attr in getattr(g, 'attributes', []):
+                    if type(attr).__name__ == 'StarGiftAttributeModel':
+                        doc = getattr(attr, 'document', None)
+                        if doc and doc.id in target_doc_ids:
+                            slug = getattr(g, 'slug', None)
+                            if slug:
+                                return slug
+            offset = getattr(resale, 'next_offset', '') or ''
+            if not offset:
+                break
+            await asyncio.sleep(0.5)
+        return None
+
+    async def _discover_crafted_sets(self, gift_id):
+        def_id, def_ah = await self._get_default_set_id(gift_id)
+        default_set = await self._fetch_sticker_set(def_id, def_ah) if def_id else None
+        default_doc_ids = {d.id for d in default_set.documents} if default_set else set()
+
+        all_doc_ids = await self._get_all_model_doc_ids(gift_id)
+        remaining = set(all_doc_ids) - default_doc_ids
+
+        if not remaining:
+            return []
+
+        found_ss_ids = {def_id} if def_id else set()
+        crafted_sets = []
+        attempts = 0
+
+        while remaining and attempts < 10:
+            attempts += 1
+            slug = None
+
+            for doc_id in list(remaining)[:15]:
+                slug = await self._find_crafted_slug_filtered(gift_id, doc_id)
+                if slug:
+                    break
+                await asyncio.sleep(0.2)
+
+            if not slug:
+                slug = await self._find_crafted_slug_paginated(gift_id, remaining)
+
+            if not slug:
+                break
+
+            ss_id, ss_ah = await self._get_stickerset_from_slug(slug)
+            if not ss_id or ss_id in found_ss_ids:
+                remaining.discard(next(iter(remaining)))
+                continue
+
+            found_ss_ids.add(ss_id)
+            result = await self._fetch_sticker_set(ss_id, ss_ah)
+            if result:
+                crafted_sets.append(result)
+                remaining -= {d.id for d in result.documents}
+            else:
+                break
+
+            await asyncio.sleep(0.3)
+
+        return crafted_sets
+
     async def _get_bot_gifts(self, bot_token):
         try:
             async with aiohttp.ClientSession() as s:
@@ -1155,6 +1323,37 @@ class StarsX(loader.Module):
         except Exception:
             return None, None
 
+    async def _try_delete(self, msg):
+        try:
+            if msg:
+                await msg.delete()
+        except Exception:
+            pass
+
+    async def _send_sticker_docs(self, message, docs, reply_id):
+        sent = 0
+        for doc in docs:
+            if self._show_stop:
+                return sent, True
+            try:
+                data = await self._client.download_media(doc, bytes)
+                if not data:
+                    continue
+                f = io.BytesIO(data)
+                f.name = "sticker.tgs"
+                await self._client.send_file(
+                    message.chat_id, f,
+                    reply_to=reply_id,
+                )
+                sent += 1
+            except Exception:
+                pass
+            if sent % 10 == 0 and sent > 0:
+                await asyncio.sleep(1)
+            else:
+                await asyncio.sleep(0.3)
+        return sent, False
+
     @loader.command(
         ru_doc="Показать стикер подарка или список подарков",
         en_doc="Show gift sticker or list gifts",
@@ -1185,8 +1384,16 @@ class StarsX(loader.Module):
             if len(parts) < 2:
                 await utils.answer(message, self.strings["show_help"].format(prefix=prefix))
                 return
-            query = "".join(parts[1:])
-            await self._show_all_models(message, query)
+            mode_arg = parts[1].lower()
+            if mode_arg in ("craft", "ord"):
+                if len(parts) < 3:
+                    await utils.answer(message, self.strings["show_help"].format(prefix=prefix))
+                    return
+                query = " ".join(parts[2:])
+                await self._show_all_models(message, query, mode_arg)
+            else:
+                query = " ".join(parts[1:])
+                await self._show_all_models(message, query, "ord")
             return
 
         if cmd == "list":
@@ -1242,9 +1449,9 @@ class StarsX(loader.Module):
             try:
                 data = await self._client.download_media(model_doc, bytes)
                 f = io.BytesIO(data)
-                f.name = f"nft_{slug}.tgs"
+                f.name = "sticker.tgs"
                 await self._client.send_file(
-                    message.chat_id, f, force_document=True, reply_to=reply_id,
+                    message.chat_id, f, reply_to=reply_id,
                 )
             except Exception:
                 pass
@@ -1257,7 +1464,7 @@ class StarsX(loader.Module):
             message.chat_id, f"<blockquote>{info}</blockquote>",
             parse_mode="html", reply_to=reply_id,
         )
-        await utils.answer(status_msg, self.strings["show_sticker_sent"])
+        await self._try_delete(status_msg)
 
     async def _show_sticker(self, message, arg):
         status_msg = await utils.answer(message, self.strings["show_checking"])
@@ -1278,13 +1485,12 @@ class StarsX(loader.Module):
             try:
                 data = await self._client.download_media(selected.sticker, bytes)
                 f = io.BytesIO(data)
-                f.name = f"gift_{selected.id}.tgs"
+                f.name = "sticker.tgs"
                 await self._client.send_file(
                     message.chat_id, f,
-                    caption=f"Index: <code>{gift_val}</code>, ID: <code>{selected.id}</code>",
-                    force_document=True, parse_mode="html", reply_to=reply_id,
+                    reply_to=reply_id,
                 )
-                await utils.answer(status_msg, self.strings["show_sticker_sent"])
+                await self._try_delete(status_msg)
             except Exception as e:
                 await utils.answer(status_msg, self.strings["show_download_error"].format(error=str(e)))
             return
@@ -1294,13 +1500,12 @@ class StarsX(loader.Module):
                 try:
                     data = await self._client.download_media(g.sticker, bytes)
                     f = io.BytesIO(data)
-                    f.name = f"gift_{g.id}.tgs"
+                    f.name = "sticker.tgs"
                     await self._client.send_file(
                         message.chat_id, f,
-                        caption=f"Index: <code>{i}</code>, ID: <code>{g.id}</code>",
-                        force_document=True, parse_mode="html", reply_to=reply_id,
+                        reply_to=reply_id,
                     )
-                    await utils.answer(status_msg, self.strings["show_sticker_sent"])
+                    await self._try_delete(status_msg)
                 except Exception as e:
                     await utils.answer(status_msg, self.strings["show_download_error"].format(error=str(e)))
                 return
@@ -1317,7 +1522,7 @@ class StarsX(loader.Module):
                 f"<blockquote>{self.strings['show_hidden_gift_info'].format(id=gift_val, stars=price)}</blockquote>",
                 parse_mode="html", reply_to=reply_id,
             )
-            await utils.answer(status_msg, self.strings["show_sticker_sent"])
+            await self._try_delete(status_msg)
             return
         except RPCError as e:
             if "STARGIFT_INVALID" not in str(e):
@@ -1336,7 +1541,7 @@ class StarsX(loader.Module):
                         slug = getattr(gift, 'slug', None)
                         if slug:
                             await self._show_nft_sticker(message, slug)
-                            await utils.answer(status_msg, self.strings["show_sticker_sent"])
+                            await self._try_delete(status_msg)
                             return
         except Exception:
             pass
@@ -1380,7 +1585,7 @@ class StarsX(loader.Module):
             )
             await asyncio.sleep(0.5)
 
-    async def _show_all_models(self, message, query):
+    async def _show_all_models(self, message, query, mode="ord"):
         prefix = self.get_prefix()
         slug = self._parse_nft_slug(query)
         if slug:
@@ -1399,29 +1604,51 @@ class StarsX(loader.Module):
         info = self._collections_cache[gift_id]
         title = info['title']
 
-        status_msg = await utils.answer(message, self.strings["show_all_loading"].format(name=title))
+        if mode == "craft":
+            status_msg = await utils.answer(
+                message,
+                self.strings["show_all_discovering_crafted"].format(name=title),
+            )
+        else:
+            status_msg = await utils.answer(
+                message,
+                self.strings["show_all_loading"].format(name=title),
+            )
+
         reply_id = await self._get_reply_id(message)
-
-        ss_result, set_name = await self._get_model_stickerset(gift_id)
-        if not ss_result:
-            await utils.answer(status_msg, self.strings["show_all_no_set"])
-            return
-
-        docs = ss_result.documents
-        total = len(docs)
         self._show_stop = False
 
-        await utils.answer(
-            status_msg,
-            self.strings["show_all_info"].format(
-                title=title, count=total,
-                stars=info['stars'], upgrade=info['upgrade'],
-            ),
-        )
+        if mode == "craft":
+            crafted_sets = await self._discover_crafted_sets(gift_id)
+            if not crafted_sets:
+                await utils.answer(status_msg, self.strings["show_all_no_crafted"].format(name=title))
+                return
 
-        sent = 0
-        for i, doc in enumerate(docs):
-            if self._show_stop:
+            all_docs = []
+            for cs in crafted_sets:
+                all_docs.extend(cs.documents)
+            total = len(all_docs)
+
+            if len(crafted_sets) > 1:
+                await utils.answer(
+                    status_msg,
+                    self.strings["show_all_info_crafted_multi"].format(
+                        title=title,
+                        sets_count=len(crafted_sets),
+                        count=total,
+                    ),
+                )
+            else:
+                await utils.answer(
+                    status_msg,
+                    self.strings["show_all_info"].format(
+                        title=title, mode="crafted", count=total,
+                    ),
+                )
+
+            sent, stopped = await self._send_sticker_docs(message, all_docs, reply_id)
+
+            if stopped:
                 await self._client.send_message(
                     message.chat_id,
                     self.strings["show_all_stopped"].format(sent=sent, total=total),
@@ -1430,31 +1657,44 @@ class StarsX(loader.Module):
                 self._show_stop = False
                 return
 
-            try:
-                data = await self._client.download_media(doc, bytes)
-                if not data:
-                    continue
-                f = io.BytesIO(data)
-                fname = f"{title} {i + 1}/{total}.tgs"
-                f.name = fname
-                await self._client.send_file(
-                    message.chat_id, f,
-                    force_document=True, reply_to=reply_id,
-                    attributes=[DocumentAttributeFilename(file_name=fname)],
-                )
-                sent += 1
-                if sent % 10 == 0:
-                    await asyncio.sleep(1)
-                else:
-                    await asyncio.sleep(0.3)
-            except Exception:
-                pass
+            await self._client.send_message(
+                message.chat_id,
+                self.strings["show_all_done"].format(title=title, mode="crafted", sent=sent, total=total),
+                parse_mode="html", reply_to=reply_id,
+            )
 
-        await self._client.send_message(
-            message.chat_id,
-            self.strings["show_all_done"].format(title=title, sent=sent, total=total),
-            parse_mode="html", reply_to=reply_id,
-        )
+        else:
+            ss_result, set_name = await self._get_model_stickerset(gift_id)
+            if not ss_result:
+                await utils.answer(status_msg, self.strings["show_all_no_set"])
+                return
+
+            docs = ss_result.documents
+            total = len(docs)
+
+            await utils.answer(
+                status_msg,
+                self.strings["show_all_info"].format(
+                    title=title, mode="ordinary", count=total,
+                ),
+            )
+
+            sent, stopped = await self._send_sticker_docs(message, docs, reply_id)
+
+            if stopped:
+                await self._client.send_message(
+                    message.chat_id,
+                    self.strings["show_all_stopped"].format(sent=sent, total=total),
+                    parse_mode="html", reply_to=reply_id,
+                )
+                self._show_stop = False
+                return
+
+            await self._client.send_message(
+                message.chat_id,
+                self.strings["show_all_done"].format(title=title, mode="ordinary", sent=sent, total=total),
+                parse_mode="html", reply_to=reply_id,
+            )
 
     async def _show_get_user_stickers(self, message, target):
         status_msg = await utils.answer(message, self.strings["show_get_sticker_loading"])
@@ -1506,10 +1746,10 @@ class StarsX(loader.Module):
                                     data = await self._client.download_media(doc, bytes)
                                     if data:
                                         f = io.BytesIO(data)
-                                        f.name = f"nft_{slug}.tgs"
+                                        f.name = "sticker.tgs"
                                         await self._client.send_file(
                                             message.chat_id, f,
-                                            force_document=True, reply_to=reply_id,
+                                            reply_to=reply_id,
                                         )
                                         sent += 1
                                 break
@@ -1526,10 +1766,10 @@ class StarsX(loader.Module):
                         data = await self._client.download_media(sticker, bytes)
                         if data:
                             f = io.BytesIO(data)
-                            f.name = f"gift_{gid}.tgs"
+                            f.name = "sticker.tgs"
                             await self._client.send_file(
                                 message.chat_id, f,
-                                force_document=True, reply_to=reply_id,
+                                reply_to=reply_id,
                             )
                             sent += 1
                     except Exception:
@@ -1845,7 +2085,7 @@ class StarsX(loader.Module):
                 if count > 1 and i < count - 1:
                     await asyncio.sleep(0.5)
 
-            gift_info = f"Premium {months}m ({stars_cost} ☆)"
+            gift_info = f"Premium {months}m ({stars_cost})"
             if success == count:
                 await utils.answer(status_msg, self.strings["gift_sent"].format(
                     from_info=from_info, target=target_str, to_type=to_type,
@@ -2263,8 +2503,8 @@ class StarsX(loader.Module):
                 if g.id == gift_id:
                     data = await self._client.download_media(g.sticker, bytes)
                     f = io.BytesIO(data)
-                    f.name = f"gift_{gift_id}.tgs"
-                    await self._client.send_file(message.chat_id, f, force_document=True, reply_to=reply_id)
+                    f.name = "sticker.tgs"
+                    await self._client.send_file(message.chat_id, f, reply_to=reply_id)
                     break
         except Exception:
             pass
