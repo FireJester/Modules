@@ -1,9 +1,11 @@
-__version__ = (2, 0, 1)
+__version__ = (2, 1, 0)
 # meta developer: FireJester.t.me
 
 import asyncio
 import contextlib
 import logging
+from datetime import datetime
+from collections import Counter
 
 from telethon.tl.functions.contacts import BlockRequest
 from telethon.tl.functions.messages import DeleteHistoryRequest, ReportSpamRequest
@@ -36,7 +38,8 @@ class RaidProtection(loader.Module):
     strings_en = {
         "help": (
             "<b>RaidProtection - PM raid shield</b>\n\n"
-            "<code>{prefix}rp</code> - toggle raid protection on/off\n\n"
+            "<code>{prefix}rp</code> - toggle raid protection on/off\n"
+            "<code>{prefix}rpstat</code> - show raid statistics\n\n"
             "<b>How it works:</b>\n"
             "When enabled, if a new unknown user writes to you in DM "
             "(a chat that didn't exist before), the module will:\n"
@@ -54,6 +57,7 @@ class RaidProtection(loader.Module):
             "<b>User:</b> <a href='tg://user?id={user_id}'>{name}</a>\n"
             "<b>ID:</b> <code>{user_id}</code>\n"
             "{username_line}"
+            "<b>Report:</b> {report_status}\n"
             "<b>Message:</b>\n<code>{text}</code>"
         ),
         "raid_message": "Spam ban btw",
@@ -62,12 +66,20 @@ class RaidProtection(loader.Module):
             "<b>Failed to create/setup log group</b>\n\n"
             "The module will still work but without logging."
         ),
+        "stat_header": "<b>RaidProtection Statistics</b>",
+        "stat_total": "<b>Total blocked:</b> <code>{total}</code>",
+        "stat_peak_date": "<b>Peak day:</b> <code>{peak_date}</code>",
+        "stat_peak_count": "<b>Attacks on peak day:</b> <code>{peak_count}</code>",
+        "stat_empty": "<b>No raids recorded yet.</b>",
+        "report_ok": "ok",
+        "report_error": "error",
     }
 
     strings_ru = {
         "help": (
             "<b>RaidProtection - защита ЛС от рейдов</b>\n\n"
-            "<code>{prefix}rp</code> - включить/выключить защиту от рейдов\n\n"
+            "<code>{prefix}rp</code> - включить/выключить защиту от рейдов\n"
+            "<code>{prefix}rpstat</code> - показать статистику рейдов\n\n"
             "<b>Как работает:</b>\n"
             "При включении, если новый неизвестный пользователь пишет вам в ЛС "
             "(чат, которого раньше не существовало), модуль:\n"
@@ -85,6 +97,7 @@ class RaidProtection(loader.Module):
             "<b>Пользователь:</b> <a href='tg://user?id={user_id}'>{name}</a>\n"
             "<b>ID:</b> <code>{user_id}</code>\n"
             "{username_line}"
+            "<b>Репорт:</b> {report_status}\n"
             "<b>Сообщение:</b>\n<code>{text}</code>"
         ),
         "raid_message": "Spam ban btw",
@@ -93,6 +106,13 @@ class RaidProtection(loader.Module):
             "<b>Не удалось создать/настроить группу логов</b>\n\n"
             "Модуль продолжит работать, но без логирования."
         ),
+        "stat_header": "<b>Статистика RaidProtection</b>",
+        "stat_total": "<b>Всего заблокировано:</b> <code>{total}</code>",
+        "stat_peak_date": "<b>Самый пик был в:</b> <code>{peak_date}</code>",
+        "stat_peak_count": "<b>Атаковавших в пик:</b> <code>{peak_count}</code>",
+        "stat_empty": "<b>Рейдов пока не зафиксировано.</b>",
+        "report_ok": "ok",
+        "report_error": "error",
     }
 
     def __init__(self):
@@ -126,6 +146,15 @@ class RaidProtection(loader.Module):
                 if getattr(uname_obj, "active", False):
                     return uname_obj.username
         return None
+
+    def _record_ban(self):
+        ban_dates = self.get("ban_dates", [])
+        today = datetime.now().strftime("%d.%m.%Y")
+        ban_dates.append(today)
+        self.set("ban_dates", ban_dates)
+
+        total = self.get("total_bans", 0)
+        self.set("total_bans", total + 1)
 
     async def _send_with_flood_wait(self, coro_func, *args, **kwargs):
         max_retries = 5
@@ -320,6 +349,31 @@ class RaidProtection(loader.Module):
             self.strings["help"].format(prefix=prefix),
         )
 
+    @loader.command(
+        ru_doc="Показать статистику рейдов",
+        en_doc="Show raid statistics",
+    )
+    async def rpstat(self, message: Message):
+        """Show raid protection statistics"""
+        total = self.get("total_bans", 0)
+        ban_dates = self.get("ban_dates", [])
+
+        if total == 0 or not ban_dates:
+            await utils.answer(message, self.strings["stat_empty"])
+            return
+
+        date_counter = Counter(ban_dates)
+        peak_date, peak_count = date_counter.most_common(1)[0]
+
+        stat_text = (
+            self.strings["stat_header"] + "\n\n"
+            + self.strings["stat_total"].format(total=total) + "\n"
+            + self.strings["stat_peak_date"].format(peak_date=peak_date) + "\n"
+            + self.strings["stat_peak_count"].format(peak_count=peak_count)
+        )
+
+        await utils.answer(message, stat_text)
+
     @loader.watcher()
     async def watcher(self, message: Message):
         if (
@@ -386,6 +440,7 @@ class RaidProtection(loader.Module):
         message = self._ban_queue.pop(0)
         sender_id = message.sender_id
         blocked = False
+        report_status = self.strings["report_error"]
         try:
             try:
                 entity = await self._client.get_entity(sender_id)
@@ -394,15 +449,21 @@ class RaidProtection(loader.Module):
             except Exception:
                 name = str(sender_id)
                 username = None
+
             try:
                 await self._client.send_message(sender_id, self.strings["raid_message"])
             except Exception as e:
                 logger.error(f"[RaidProtection] Failed to send raid message to {sender_id}: {e}")
+
             await asyncio.sleep(0.2)
+
             try:
                 await self._client(ReportSpamRequest(peer=sender_id))
+                report_status = self.strings["report_ok"]
             except Exception as e:
+                report_status = self.strings["report_error"]
                 logger.error(f"[RaidProtection] Failed to report spam {sender_id}: {e}")
+
             try:
                 await self._client(DeleteHistoryRequest(
                     peer=sender_id,
@@ -412,11 +473,13 @@ class RaidProtection(loader.Module):
                 ))
             except Exception as e:
                 logger.error(f"[RaidProtection] Failed to delete history with {sender_id}: {e}")
+
             try:
                 await self._client(BlockRequest(id=sender_id))
                 blocked = True
             except Exception as e:
                 logger.error(f"[RaidProtection] Failed to block {sender_id}: {e}")
+
             raw = getattr(message, "raw_text", None) or ""
             msg_text = self._escape(
                 "<sticker>"
@@ -435,17 +498,22 @@ class RaidProtection(loader.Module):
                     )
                 )
             )
+
             username_line = ""
             if username:
                 username_line = f"<b>Username:</b> @{username}\n"
+
             log_text = self.strings["banned_log"].format(
                 user_id=sender_id,
                 name=name,
                 username_line=username_line,
+                report_status=report_status,
                 text=msg_text,
             )
             await self._send_log(log_text)
+
             if blocked:
+                self._record_ban()
                 logger.warning(f"[RaidProtection] Raider punished: {sender_id}")
                 self._approve(sender_id, "banned")
             else:
