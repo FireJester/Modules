@@ -62,7 +62,7 @@ class Deleter(loader.Module):
 
     def __init__(self):
         self.config = loader.ModuleConfig(
-            "TIMEZONE_OFFSET", 3, "Смещение часового пояса от UTC (от -12 до +12). Используется для команды .del today",
+            "TIMEZONE_OFFSET", 3, "UTC timezone. For .del today command",
         )
 
     async def _bulk_delete(self, client, chat_id, msg_ids: list) -> tuple:
