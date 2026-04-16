@@ -295,8 +295,6 @@ class TGWatcher(loader.Module):
         for num in list(self._clients.keys()):
             await self._disconnect_account(num, save=False)
 
-    # --- Log group management ---
-
     def _get_username(self, entity):
         if hasattr(entity, "username") and entity.username:
             return entity.username
@@ -511,8 +509,6 @@ class TGWatcher(loader.Module):
                         )
                     except Exception:
                         pass
-
-    # --- Session management ---
 
     def _extract_session_from_text(self, text):
         if not text:
@@ -772,8 +768,6 @@ class TGWatcher(loader.Module):
             )
         )
 
-    # --- Commands ---
-
     @loader.command(
         ru_doc="Управление TGWatcher",
         en_doc="TGWatcher management",
@@ -806,18 +800,15 @@ class TGWatcher(loader.Module):
     async def _cmd_add(self, message: Message, args):
         session_str = None
 
-        # from args
         if len(args) > 1:
             text = " ".join(args[1:])
             session_str = self._extract_session_from_text(text)
 
-        # from reply text
         if not session_str:
             reply = await message.get_reply_message()
             if reply:
                 if reply.text:
                     session_str = self._extract_session_from_text(reply.text)
-                # from reply .session file
                 if not session_str and reply.file:
                     file_name = getattr(reply.file, "name", None) or ""
                     if file_name.endswith(".session"):
@@ -838,7 +829,6 @@ class TGWatcher(loader.Module):
 
         status_msg = await utils.answer(message, self.strings["connecting"])
 
-        # check if already exists by parsing
         parsed = parse_string_session(session_str)
         if not parsed:
             return await utils.answer(
@@ -848,7 +838,6 @@ class TGWatcher(loader.Module):
                 ),
             )
 
-        # determine next number
         if self._accounts:
             next_num = max(self._accounts.keys()) + 1
         else:
@@ -865,7 +854,6 @@ class TGWatcher(loader.Module):
                 ),
             )
 
-        # check duplicate by user_id
         for existing_num, acc in self._accounts.items():
             if existing_num != next_num and acc.get("user_id") == me.id:
                 await self._disconnect_account(next_num, save=False)
@@ -874,7 +862,6 @@ class TGWatcher(loader.Module):
                     self.strings["account_exists"].format(num=existing_num),
                 )
 
-        # save
         sessions = self._get_sessions_list()
         sessions.append(session_str)
         self._save_sessions_list(sessions)

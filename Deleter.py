@@ -1,4 +1,4 @@
-__version__ = (2, 0, 4)
+__version__ = (2, 0, 5)
 # meta developer: FireJester.t.me
 
 import asyncio
@@ -6,6 +6,7 @@ import logging
 import random
 from datetime import timedelta, timezone, datetime
 
+from telethon.tl.functions.channels import LeaveChannelRequest
 from telethon.tl.types import Message, User
 
 from .. import loader, utils
@@ -23,6 +24,7 @@ class Deleter(loader.Module):
             "<b>Deleter - swift message deletion</b>\n\n"
             "<b>Own messages:</b>\n"
             "<code>{prefix}del me</code> - delete all your messages in current chat\n"
+            "<code>{prefix}del me -f</code> - delete all your messages and leave the chat\n"
             "<code>{prefix}del [n]</code> - delete last n your messages\n"
             "<code>{prefix}del [n]</code> (reply) - delete n your messages before replied message\n"
             "<code>{prefix}del now</code> - delete your messages from last 5 minutes\n"
@@ -37,6 +39,7 @@ class Deleter(loader.Module):
         "no_user": "<b>Error:</b> User not found",
         "no_perms": "<b>Error:</b> Not enough permissions to delete some messages",
         "error": "<b>Error:</b> {error}",
+        "done_me": "<b>All your messages in chat <i>{chat}</i> have been deleted.</b>",
     }
 
     strings_ru = {
@@ -44,6 +47,7 @@ class Deleter(loader.Module):
             "<b>Deleter - быстрое удаление сообщений</b>\n\n"
             "<b>Свои сообщения:</b>\n"
             "<code>{prefix}del me</code> - удалить все свои сообщения в текущем чате\n"
+            "<code>{prefix}del me -f</code> - удалить все свои сообщения и покинуть чат\n"
             "<code>{prefix}del [n]</code> - удалить последние n своих сообщений\n"
             "<code>{prefix}del [n]</code> (реплай) - удалить n своих сообщений до указанного сообщения\n"
             "<code>{prefix}del now</code> - удалить свои сообщения за последние 5 минут\n"
@@ -58,6 +62,7 @@ class Deleter(loader.Module):
         "no_user": "<b>Ошибка:</b> Пользователь не найден",
         "no_perms": "<b>Ошибка:</b> Недостаточно прав для удаления некоторых сообщений",
         "error": "<b>Ошибка:</b> {error}",
+        "done_me": "<b>Все ваши сообщения в чате <i>{chat}</i> удалены.</b>",
     }
 
     def __init__(self):
@@ -127,7 +132,8 @@ class Deleter(loader.Module):
         cmd = args_list[0].lower()
 
         if cmd == "me":
-            await self._delete_me(message)
+            leave = "-f" in args_list
+            await self._delete_me(message, leave=leave)
         elif cmd == "before":
             await self._delete_before(message)
         elif cmd == "after":
@@ -154,39 +160,128 @@ class Deleter(loader.Module):
                 self.strings["help"].format(prefix=prefix),
             )
 
-    async def _delete_me(self, message: Message):
+    async def _get_chat_name(self, message: Message) -> str:
+        try:
+            entity = await message.client.get_entity(message.chat_id)
+            if hasattr(entity, "title") and entity.title:
+                return entity.title
+            if hasattr(entity, "first_name"):
+                name = entity.first_name or ""
+                if hasattr(entity, "last_name") and entity.last_name:
+                    name = name + " " + entity.last_name
+                return name.strip() or str(message.chat_id)
+        except Exception:
+            pass
+        return str(message.chat_id)
+
+    async def _notify_done(self, client, chat_name: str):
+        try:
+            await client.inline_query(
+                "@hikka_userbot_inline_helper_bot",
+                self.strings["done_me"].format(chat=chat_name),
+            )
+        except Exception:
+            pass
+        try:
+            me = await client.get_me()
+            await client.send_message(
+                me.id,
+                self.strings["done_me"].format(chat=chat_name),
+            )
+        except Exception:
+            pass
+
+    async def _delete_me(self, message: Message, leave: bool = False):
         chat_id = message.chat_id
         cmd_msg_id = message.id
 
+        await message.delete()
+
         try:
-            ids = [cmd_msg_id]
+            chat_name = await _get_chat_name_static(message)
+        except Exception:
+            chat_name = str(chat_id)
+
+        try:
+            ids = []
             async for msg in message.client.iter_messages(chat_id, from_user="me"):
-                if msg.id != cmd_msg_id:
-                    ids.append(msg.id)
+                ids.append(msg.id)
 
-            deleted, failed = await self._bulk_delete(message.client, chat_id, ids)
+            if not ids:
+                await self._notify_done(message.client, chat_name)
+                if leave:
+                    await self._leave_chat(message.client, chat_id)
+                return
 
-            if failed:
-                await message.client.send_message(chat_id, self.strings["no_perms"])
+            chunk_size = random.randint(90, 110)
+            first_chunk = ids[:chunk_size]
+            rest = ids[chunk_size:]
+
+            failed = 0
+
+            try:
+                await message.client.delete_messages(chat_id, first_chunk)
+            except Exception:
+                failed += len(first_chunk)
+
+            chunk = []
+            chunk_size = random.randint(90, 110)
+
+            for mid in rest:
+                chunk.append(mid)
+                if len(chunk) >= chunk_size:
+                    await asyncio.sleep(random.uniform(0.5, 1.5))
+                    try:
+                        await message.client.delete_messages(chat_id, chunk)
+                    except Exception:
+                        failed += len(chunk)
+                    chunk.clear()
+                    chunk_size = random.randint(90, 110)
+
+            if chunk:
+                await asyncio.sleep(random.uniform(0.5, 1.5))
+                try:
+                    await message.client.delete_messages(chat_id, chunk)
+                except Exception:
+                    failed += len(chunk)
+
+            await self._notify_done(message.client, chat_name)
+
+            if leave:
+                await self._leave_chat(message.client, chat_id)
+
         except Exception as e:
             logger.error(f"[Deleter] del me error: {e}")
-            await message.client.send_message(
-                chat_id, self.strings["error"].format(error=str(e))
-            )
+            try:
+                me = await message.client.get_me()
+                await message.client.send_message(
+                    me.id,
+                    self.strings["error"].format(error=str(e)),
+                )
+            except Exception:
+                pass
+
+    async def _leave_chat(self, client, chat_id):
+        try:
+            await client(LeaveChannelRequest(chat_id))
+        except Exception:
+            try:
+                await client.kick_participant(chat_id, "me")
+            except Exception as e:
+                logger.error(f"[Deleter] leave error: {e}")
 
     async def _delete_own_n(self, message: Message, count: int):
         if count <= 0:
             return await utils.answer(message, self.strings["no_count"])
 
         chat_id = message.chat_id
-        reply_id = message.reply_to_msg_id if message.is_reply else None
         cmd_msg_id = message.id
 
         try:
             ids = [cmd_msg_id]
             kwargs = {"entity": chat_id, "from_user": "me"}
-            if reply_id:
-                kwargs["max_id"] = reply_id
+            if message.is_reply:
+                kwargs["max_id"] = message.reply_to_msg_id
 
             async for msg in message.client.iter_messages(**kwargs):
                 if msg.id != cmd_msg_id:
@@ -333,3 +428,18 @@ class Deleter(loader.Module):
             await message.client.send_message(
                 chat_id, self.strings["error"].format(error=str(e))
             )
+
+
+async def _get_chat_name_static(message: Message) -> str:
+    try:
+        entity = await message.client.get_entity(message.chat_id)
+        if hasattr(entity, "title") and entity.title:
+            return entity.title
+        if hasattr(entity, "first_name"):
+            name = entity.first_name or ""
+            if hasattr(entity, "last_name") and entity.last_name:
+                name = name + " " + entity.last_name
+            return name.strip() or str(message.chat_id)
+    except Exception:
+        pass
+    return str(message.chat_id)
