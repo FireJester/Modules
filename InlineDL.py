@@ -80,7 +80,7 @@ def make_kk_url(platform, url):
     if platform == "tiktok":
         return re.sub(
             r"(https?://(?:(?:vm|vt|www)\.)?)tiktok\.com",
-            r"\1kktiktok.com",
+            r"\1kksave.com",
             url,
         )
     return url
