@@ -1,13 +1,14 @@
-__version__ = (1, 0, 0)
+__version__ = (1, 1, 0)
 # meta developer: FireJester.t.me
+# requires: aiohttp
 
 import re
 import time
 import logging
 import asyncio
-import subprocess
-import sys
 import datetime
+
+import aiohttp
 
 from aiogram.types import (
     InlineQuery,
@@ -19,23 +20,7 @@ from .. import loader, utils
 
 logger = logging.getLogger(__name__)
 
-
-def _ensure_deps():
-    try:
-        __import__("aiohttp")
-    except ImportError:
-        subprocess.check_call(
-            [sys.executable, "-m", "pip", "install", "aiohttp", "-q"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-
-
-_ensure_deps()
-
-import aiohttp
-
-BANNER = "https://github.com/FireJester/Media/raw/main/Banner_for_inline_query_in_TONScanner.jpeg"
+BANNER = "https://github.com/FireJester/Modules/raw/main/Assets/TONScanner/Inline_query.png"
 
 TONAPI_BASE = "https://tonapi.io/v2"
 
@@ -238,23 +223,25 @@ async def scan_wallet(addr):
 
 def build_message(d):
     lines = []
-    lines.append("<b>TONScanner</b>")
-    lines.append("")
-    lines.append(f"<b>Address:</b> <code>{d['addr']}</code>")
-    if d["name"]:
-        lines.append(f"<b>Name:</b> {escape_html(d['name'])}")
-    lines.append(f"<b>Status:</b> {d['status']}")
-    w_type = ", ".join(d["interfaces"]) if d["interfaces"] else "unknown"
-    lines.append(f"<b>Type:</b> {w_type}")
-    if d["is_scam"]:
-        lines.append("<b>SCAM</b>")
-    lines.append("")
+    lines.append(f'<b><a href="https://tonviewer.com/{d["addr"]}">TONScanner</a></b>')
 
-    lines.append(
+    info_lines = []
+    info_lines.append(f"<b>Address:</b> <code>{d['addr']}</code>")
+    if d["name"]:
+        info_lines.append(f"<b>Name:</b> {escape_html(d['name'])}")
+    info_lines.append(f"<b>Status:</b> {d['status']}")
+    w_type = ", ".join(d["interfaces"]) if d["interfaces"] else "unknown"
+    info_lines.append(f"<b>Type:</b> {w_type}")
+    if d["is_scam"]:
+        info_lines.append("<b>SCAM</b>")
+    lines.append("<blockquote>" + "\n".join(info_lines) + "</blockquote>")
+
+    bal_lines = []
+    bal_lines.append(
         f"<b>Balance:</b> <code>{fmt_ton(d['balance_ton'])}</code> TON"
         f" (<code>{fmt_rub(d['balance_rub'])}</code> RUB)"
     )
-    lines.append(
+    bal_lines.append(
         f"<b>Rate:</b> 1 TON = {d['rub_price']:.2f} RUB / {d['usd_price']:.4f} USD"
     )
     if d["diff_24h_rub"] or d["diff_7d_rub"] or d["diff_30d_rub"]:
@@ -265,51 +252,53 @@ def build_message(d):
             parts.append(f"7d: {d['diff_7d_rub']}")
         if d["diff_30d_rub"]:
             parts.append(f"30d: {d['diff_30d_rub']}")
-        lines.append(f"<b>Change RUB:</b> {' | '.join(parts)}")
-    lines.append("")
+        bal_lines.append(f"<b>Change RUB:</b> {' | '.join(parts)}")
+    lines.append("<blockquote>" + "\n".join(bal_lines) + "</blockquote>")
 
-    lines.append(f"<b>Transactions:</b> {d['tx_count']}")
-    lines.append(
+    tx_lines = []
+    tx_lines.append(f"<b>Transactions:</b> {d['tx_count']}")
+    tx_lines.append(
         f"<b>Incoming:</b> {d['in_count']} txs / "
         f"<code>{fmt_ton(d['total_in_ton'])}</code> TON"
         f" (<code>{fmt_rub(d['total_in_rub'])}</code> RUB)"
     )
-    lines.append(
+    tx_lines.append(
         f"<b>Outgoing:</b> {d['out_count']} txs / "
         f"<code>{fmt_ton(d['total_out_ton'])}</code> TON"
         f" (<code>{fmt_rub(d['total_out_rub'])}</code> RUB)"
     )
-    lines.append(
+    tx_lines.append(
         f"<b>Volume:</b> <code>{fmt_ton(d['volume_ton'])}</code> TON"
         f" (<code>{fmt_rub(d['volume_rub'])}</code> RUB)"
     )
-    lines.append(
+    tx_lines.append(
         f"<b>Fees:</b> <code>{fmt_ton(d['total_fees_ton'])}</code> TON"
         f" (<code>{fmt_rub(d['fees_rub'])}</code> RUB)"
     )
-    lines.append("")
+    lines.append("<blockquote>" + "\n".join(tx_lines) + "</blockquote>")
 
     if d["jetton_count"] > 0:
-        lines.append(f"<b>Jettons ({d['jetton_count']}):</b>")
+        jt_lines = [f"<b>Jettons ({d['jetton_count']}):</b>"]
         for jt in d["jetton_list"]:
-            lines.append(f"  <code>{jt}</code>")
-        lines.append("")
+            jt_lines.append(f"  <code>{jt}</code>")
+        lines.append("<blockquote>" + "\n".join(jt_lines) + "</blockquote>")
 
     if d["nft_count"] > 0:
-        lines.append(f"<b>NFTs ({d['nft_count']}):</b>")
+        nft_lines = [f"<b>NFTs ({d['nft_count']}):</b>"]
         for nft_name, col_name in d["nft_list"]:
             if col_name:
-                lines.append(f"  {escape_html(nft_name)} | {escape_html(col_name)}")
+                nft_lines.append(f"  {escape_html(nft_name)} | {escape_html(col_name)}")
             else:
-                lines.append(f"  {escape_html(nft_name)}")
-        lines.append("")
+                nft_lines.append(f"  {escape_html(nft_name)}")
+        lines.append("<blockquote>" + "\n".join(nft_lines) + "</blockquote>")
 
+    time_lines = []
     if d["last_activity"]:
-        lines.append(f"<b>Last activity:</b> {ts_to_str(d['last_activity'])}")
+        time_lines.append(f"<b>Last activity:</b> {ts_to_str(d['last_activity'])}")
     if d["first_tx_time"]:
-        lines.append(f"<b>First transaction:</b> {ts_to_str(d['first_tx_time'])}")
-    lines.append("")
-    lines.append(f'<a href="https://tonviewer.com/{d["addr"]}">tonviewer.com</a>')
+        time_lines.append(f"<b>First transaction:</b> {ts_to_str(d['first_tx_time'])}")
+    if time_lines:
+        lines.append("<blockquote>" + "\n".join(time_lines) + "</blockquote>")
 
     return "\n".join(lines)
 
