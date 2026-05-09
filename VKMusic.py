@@ -22,7 +22,6 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     InlineKeyboardButton,
     ChosenInlineResult,
-    Update,
 )
 
 from telethon.tl.types import Message
@@ -723,7 +722,6 @@ class VKMusic(loader.Module):
         self._vk = None
         self._vk_dl = None
         self._upload_lock = None
-        self._patched = False
         self._real_cache = {}
         self._stub_cache = {}
         self._search_cache = {}
@@ -749,58 +747,8 @@ class VKMusic(loader.Module):
             except Exception:
                 pass
         await self._ensure_vk()
-        await self._unpatch_feed_update()
-        self._patch_feed_update()
 
-    def _patch_feed_update(self):
-        if self._patched:
-            return
-        try:
-            dp = self.inline._dp
-            if hasattr(dp.feed_update, "_is_patched_vkmusic"):
-                self._patched = True
-                return
-            original_feed = dp.feed_update
-            dp._vkmusic_original_feed_update = original_feed
-            module_self = self
-
-            async def patched_feed(bot_inst, update: Update, **kw):
-                if (
-                    hasattr(update, "chosen_inline_result")
-                    and update.chosen_inline_result is not None
-                ):
-                    chosen = update.chosen_inline_result
-                    _log(
-                        "CHOSEN_RAW",
-                        f"result_id={chosen.result_id!r} "
-                        f"imid={chosen.inline_message_id!r} "
-                        f"user={chosen.from_user.id}",
-                    )
-                    asyncio.ensure_future(
-                        module_self._on_chosen_inline_result(chosen)
-                    )
-                return await original_feed(bot_inst, update, **kw)
-
-            patched_feed._is_patched_vkmusic = True
-            dp.feed_update = patched_feed
-            self._patched = True
-            _log("PATCH", "feed_update patched OK")
-        except Exception as e:
-            _log("PATCH", f"Patch failed: {e}\n{traceback.format_exc()}")
-
-    async def _unpatch_feed_update(self):
-        if not self._patched:
-            return
-        try:
-            dp = self.inline._dp
-            if hasattr(dp, "_vkmusic_original_feed_update"):
-                dp.feed_update = dp._vkmusic_original_feed_update
-                del dp._vkmusic_original_feed_update
-            self._patched = False
-            _log("PATCH", "feed_update unpatched OK")
-        except Exception as e:
-            _log("PATCH", f"Unpatch failed: {e}")
-
+    @loader.need_update("chosen_inline_result")
     async def _on_chosen_inline_result(self, chosen: ChosenInlineResult):
         rid = chosen.result_id
         imid = chosen.inline_message_id
@@ -1461,7 +1409,6 @@ class VKMusic(loader.Module):
             pass
 
     async def on_unload(self):
-        await self._unpatch_feed_update()
         self._real_cache.clear()
         self._stub_cache.clear()
         self._search_cache.clear()
